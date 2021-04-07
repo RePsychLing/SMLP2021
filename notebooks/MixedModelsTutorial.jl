@@ -270,7 +270,12 @@ m1.θ     # Parameter vector for RES (w/o residual); m1.theta
 
 # ╔═╡ 2bd21aee-e488-4c09-b4de-efc24ceec9c9
 md"""
-*There's something interesting here.  The s.d. of the intercept for child is almost exactly the same as the residual s.d.*
+*DB: There's something interesting here.  The s.d. of the intercept for child is almost exactly the same as the residual s.d.*
+"""
+
+# ╔═╡ ad27c2df-3276-4e38-a667-dc83460bd845
+md"""
+*RK: I had not noticed this before, but individual differences in children's physical fitness are much larger than any other effect I have seen for these data.*
 """
 
 # ╔═╡ cea0b827-13ec-4db3-877c-47ffe3c5e2ac
@@ -495,7 +500,8 @@ versioninfo()
 # ╠═646d3b14-45b8-4a2a-93f1-61685108eaef
 # ╠═469efe6d-5018-4ad5-bc5a-ac191cba9be6
 # ╠═b44b006f-7556-42a8-8bcb-096b575fa305
-# ╟─2bd21aee-e488-4c09-b4de-efc24ceec9c9
+# ╠═2bd21aee-e488-4c09-b4de-efc24ceec9c9
+# ╠═ad27c2df-3276-4e38-a667-dc83460bd845
 # ╠═cea0b827-13ec-4db3-877c-47ffe3c5e2ac
 # ╟─77d6e8c6-173c-4a61-ad23-61620796246b
 # ╠═d06708d6-357a-48af-8ab6-5c4d4cd3483d
