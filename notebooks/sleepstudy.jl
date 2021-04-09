@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.14.0
+# v0.14.1
 
 using Markdown
 using InteractiveUtils
@@ -8,7 +8,6 @@ using InteractiveUtils
 begin
 	using Pkg
 	Pkg.activate(".")
-	Pkg.add(PackageSpec(name="MixedModels", rev="master"))
 	using MixedModels
 end		
 
@@ -38,7 +37,7 @@ The `sleepstudy` data are one of the datasets available with recent versions of 
 sleepstudy = MixedModels.dataset("sleepstudy")
 
 # ╔═╡ f3ed171c-e4ab-11ea-1eac-8b0265a6c6ea
-md"## Fitting an intial model"
+md"## Fitting an initial model"
 
 # ╔═╡ 8a902898-e485-11ea-2d50-b3c44d666f9c
 m1 = fit(MixedModel, @formula(reaction ~ 1+days+(1+days|subj)), sleepstudy)
