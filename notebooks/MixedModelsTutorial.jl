@@ -1,26 +1,23 @@
 ### A Pluto.jl notebook ###
-# v0.14.0
+# v0.14.1
 
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 4b4967d8-d6fe-403b-9fed-c7f95d9d6920
+# ╔═╡ d17d5cf8-988a-11eb-03dc-23f1449f5563
 begin
 	using Pkg
 	Pkg.activate(".")
 	Pkg.instantiate()
 end
 
-# ╔═╡ f5e09c62-9762-411c-ab71-255083c173a1
+# ╔═╡ 4cd88e2b-c6f0-49cb-846a-eaae9f892e02
 begin
-	using CSV, RCall, DataFrames, DataFramesMeta, MixedModels, JellyMe4
-	using CategoricalArrays: levels
+	using Arrow, DataAPI, DataFrames, MixedModels, StatsBase
+	using DataAPI: levels
 end
 
-# ╔═╡ 62ab7f8a-119c-4f2d-abcf-86e5842a6fa8
-using InteractiveUtils
-
-# ╔═╡ 07197c6c-9628-11eb-3be8-092b8787a84e
+# ╔═╡ 6ef1b0be-3f8e-4fbf-b313-004c3ba001bd
 md"""
 # Mixed Models Tutorial: Physical fitness in third grade
 
@@ -55,29 +52,24 @@ handled by other software.
 
 ## Read and transform
 
-+ read data
-+ center age
-+ compute indicator for quadratic trend of age
-+ specify contrasts for test factor
++ read and examine data
++ specify contrasts for the fixed-effects factors `Test` and `Sex`
++ set the "contrasts" for the random-effects grouping factors to `Grouping()`
 """
 
-# ╔═╡ dce799c0-38cf-46ae-ab36-1e620989dcea
-dat = @linq rcopy(R"readRDS('./data/fggk21.rds')") |>
-	transform(
-       a1 =  :age .- 8.5,
-       a2 = (:age .- 8.5) .^2,
-       );
+# ╔═╡ d7ea6e71-b609-4a3c-8de6-b05e6cb0aceb
+dat = Arrow.Table("./data/fggk21.arrow");
 
-# ╔═╡ 37539bd0-c9ad-4946-b024-9df1d77373ef
-describe(dat)
+# ╔═╡ 8e122db8-416c-4ee7-b3c2-6e829659a606
+describe(DataFrame(dat))
 
-# ╔═╡ f3ad7942-a561-4570-97c6-05b76e9017d1
+# ╔═╡ 7dca92f9-dcc2-462c-b501-9ecabce74005
 contr = merge(
-       Dict(nm => SeqDiffCoding() for nm in (:Test, :Sex)),
+       Dict(nm => HelmertCoding() for nm in (:Test, :Sex)),
        Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
    );
 
-# ╔═╡ 55f5f753-d335-4870-a11c-3279bacc61b3
+# ╔═╡ d813057a-ddce-4bd5-bf40-f15b71c6eeed
 md"""
 ## Hierarchical tests of VC and CP for Child and School
 
@@ -86,14 +78,14 @@ Two sequences of tests to check that VCs and CPs increase goodness of fit for ra
 ### LMM - only varying intercepts
 """
 
-# ╔═╡ b2c182fd-ca35-47a4-a89f-10c7574ad26f
-f_ovi = @formula zScore ~ 1 + Test*a1*Sex + 
+# ╔═╡ e41bb345-bd0a-457d-8d57-1e27dde43a63
+f_ovi = @formula zScore ~ 1 + Test * (age - 8.5) * Sex + 
         (1 | School) + (1 | Child) + (1 | Cohort);
 
-# ╔═╡ 15163958-681f-4a60-b059-84624063f882
+# ╔═╡ baf13d52-1569-4077-af4e-40aa53d38cf5
 m_ovi = fit(MixedModel, f_ovi, dat, contrasts=contr)
 
-# ╔═╡ 37abc84c-fff1-42ed-8f37-85231cf70927
+# ╔═╡ 153c3cb8-2488-4d70-9236-a5d4e47b6f1b
 md"""
 ### Focus on Child
 
@@ -102,36 +94,36 @@ md"""
 + compare with reference LMM
 """
 
-# ╔═╡ 045f6831-7a7e-486d-bb7a-3f1aa45cfdcd
-f_VC_C = @formula zScore ~ 1 + Test*a1*Sex + 
+# ╔═╡ 9a3aa079-5bba-49ef-af84-6fd3e82a1ee7
+f_VC_C = @formula zScore ~ 1 + Test * (age - 8.5) * Sex + 
          (1 | School) + zerocorr(1 + Test | Child) + (1 | Cohort);
 
-# ╔═╡ 5ca91c64-5311-4ccc-bd33-3310e9175d3d
+# ╔═╡ 08763df8-aea2-4de7-bbb0-b4a1247c541a
 m_VC_C = fit(MixedModel, f_VC_C, dat, contrasts=contr)
 
-# ╔═╡ 6da0675d-48b8-4c7f-a243-457bdf82eb59
-f_CP_C = @formula zScore ~ 1 + Test*a1*Sex + 
+# ╔═╡ a230a7d8-d4a7-4d5a-8e02-69d14ee157fc
+f_CP_C = @formula zScore ~ 1 + Test * (age - 8.5) * Sex + 
          (1 | School) + (1 + Test | Child) + (1 | Cohort);
 
-# ╔═╡ 5e1b3620-d0b6-4105-8a06-22bb3d74e425
+# ╔═╡ dc38aff4-71a1-44e8-8154-a00efa9aa2cb
 m_CP_C = fit(MixedModel, f_CP_C, dat, contrasts=contr)
 
-# ╔═╡ 15cb2be4-f990-4c0b-a43f-c0494a87bb9d
+# ╔═╡ 60f522a1-27aa-48fb-af89-83cb2ce38cae
 md"""
 ### Compare goodness of fit for Child sequence
 """
 
-# ╔═╡ e6ba5c01-f6d5-4733-89d2-d1c81e505dab
+# ╔═╡ 0aac930e-4b2d-4b49-9590-1d21ca0b3217
 MixedModels.likelihoodratiotest(m_ovi, m_VC_C, m_CP_C)
 
-# ╔═╡ 90c7639c-9807-4655-be6a-d6ee46c47bbd
+# ╔═╡ 7cb282db-37dd-497f-9d73-edc563a105ef
 mods = [m_ovi, m_VC_C, m_CP_C];
 
-# ╔═╡ 614b4261-b4de-45d5-9188-d7e7b623e562
+# ╔═╡ fb8f1bbf-7b7a-43b3-bedd-2977b533ffc4
 gof_summary = DataFrame(dof=dof.(mods), deviance=deviance.(mods),
               AIC = aic.(mods), AICc = aicc.(mods), BIC = bic.(mods))
 
-# ╔═╡ 75605d98-3a07-482d-9a4c-57a275979475
+# ╔═╡ 81decdea-8d98-453b-8d2b-a5ded6d815fd
 md"""
 Both VCs and CPs significantly improve the goodness of fit.
 
@@ -142,159 +134,143 @@ Both VCs and CPs significantly improve the goodness of fit.
 + compare with reference LMM
 """
 
-# ╔═╡ 124bf317-f541-46d3-9aa6-e654d22b6ed7
-f_VC_S = @formula zScore ~ 1 + Test*a1*Sex + 
+# ╔═╡ 71c49ff4-e207-40f3-ba6c-ff5aa248557c
+f_VC_S = @formula zScore ~ 1 + Test * (age - 8.5) * Sex + 
          zerocorr(1 + Test | School) + (1 | Child) + (1 | Cohort);
 
-# ╔═╡ 494df60f-1d3e-4d4b-a658-ec83f831fe23
+# ╔═╡ 534cc633-a02c-4ede-9d4b-d7ad46e38fd3
 m_VC_S = fit(MixedModel, f_VC_S, dat, contrasts=contr)
 
-# ╔═╡ 286b3890-7261-4540-8db3-7efe0322b411
-f_CP_S = @formula zScore ~ 1 + Test*a1*Sex + 
+# ╔═╡ 804b8775-31ec-486f-88c6-0586d93c1666
+f_CP_S = @formula zScore ~ 1 + Test * (age - 8.5) * Sex + 
          (1 + Test | School) + (1 | Child) + (1 | Cohort);
 
-# ╔═╡ c6ee4d76-6608-4eba-871c-68c63d63e059
+# ╔═╡ bc72326f-0ecf-44d1-ba4f-688ae7361662
 m_CP_S = fit(MixedModel, f_CP_S, dat, contrasts=contr)
 
-# ╔═╡ 31e4f4eb-05dc-4cc1-91d5-e7fee1f65012
+# ╔═╡ efaa575a-d03e-431b-a745-8553e095e111
 md"### Compare goodness of fit for School sequence"
 
-# ╔═╡ e5c2561b-8110-405c-af77-2603f3c58ed4
+# ╔═╡ ee1cad9d-ebc8-4bb6-918a-9d38f0cd2232
 MixedModels.likelihoodratiotest(m_ovi, m_VC_S, m_CP_S)
 
-# ╔═╡ 60cc13e4-3495-43f7-8a14-a531c03e39f4
+# ╔═╡ 10c85aa3-9243-4c62-9041-90e78d27d3a9
 mods_S = [m_ovi, m_VC_S, m_CP_S];
 
-# ╔═╡ 0a41a7f9-bbfe-4612-a40f-dcc61d6d69f1
+# ╔═╡ 327f3fd1-0118-4952-8e0d-0779f69ad819
 gof_summary_S = DataFrame(dof=dof.(mods_S), deviance=deviance.(mods_S),
               AIC = aic.(mods_S), AICc = aicc.(mods_S), BIC = bic.(mods_S))
 
-# ╔═╡ 98174664-ce99-487f-930d-9304c0510863
+# ╔═╡ 2a5a7755-baf2-479e-9a57-4de137b5ecf3
 md"""
 Both VCs and CPs significantly improve the goodness of fit.
 
 ## LMM
 """
 
-# ╔═╡ e52d2680-9bb5-41e4-a39f-9271c575fbeb
-f1 = @formula zScore ~ 1 + Test*a1*Sex +
-     (1+Test+a1+Sex | School) +  (1+Test | Child) + (1 | Cohort);
 
-# ╔═╡ 483bfe90-d570-43f7-8590-8f48ac6b8bb4
+# ╔═╡ 4c0a5cac-913d-490e-aeb9-505d34d89b5c
+f1 = @formula zScore ~ 1 + Test * (age - 8.5) * Sex +
+     (1+Test+(age - 8.5)+Sex | School) +  (1+Test | Child) + (1 | Cohort);
+
+# ╔═╡ 8fbaf19e-869e-4cff-84a8-83023b572e87
 m1 = fit(MixedModel, f1, dat, contrasts=contr)
 
-# ╔═╡ 7c0ef836-d570-47e6-9f1d-b48327381fc2
+# ╔═╡ ce5d4ea2-e687-4bd0-8377-d3bf21f99721
 md"## Fit statistics"
 
-# ╔═╡ 40dde025-1e61-47a4-ade1-cbbec7ca73e0
+# ╔═╡ b955207b-d422-4579-b32c-e4273710d7ce
 # MixedModels.OptSummary: get all info with: m1.optsum)
 
 loglikelihood(m1)  # StatsBase.loglikelihood: return loglikelihood of the model
 
-# ╔═╡ 734f8fe3-d2ed-4219-82c0-515e00ef08ee
+# ╔═╡ 98766877-fe20-4fac-a689-dd66d476cd40
 deviance(m1)   # StatsBase.deviance: negative twice the log-likelihood relative to saturated model
 
-# ╔═╡ 1b13c2df-c5a9-42c1-b72c-4d066b40933a
+# ╔═╡ 11291f17-1647-4b0f-8aad-26a24c75dfd1
 objective(m1)  # MixedModels.objective: saturated model not clear: negative twice the log-likelihood
 
-# ╔═╡ f7e372ee-7058-4519-b165-ee033a4c4565
+# ╔═╡ 36c392c0-548a-4cc6-8786-34e626a71cc3
 # all from StatsBase
 nobs(m1) # n of observations; they are not independent
 
-# ╔═╡ 2f14e5bb-b5d1-4caf-a21d-4c15a7ab1388
+# ╔═╡ 7eb6ef49-ec67-4649-9d91-da4d90e82db7
 dof(m1)  # n of degrees of freedom is number of model parameters
 
-# ╔═╡ 3f934f0a-3e05-447a-84b6-466c314281ce
+# ╔═╡ 755ea5ac-bf09-4ead-9f00-0c1eb973554e
 aic(m1)  # objective(m1) + 2*dof(m1)
 
-# ╔═╡ 96f9cc2d-a016-4f8e-8cbc-c94b1386729d
+# ╔═╡ bd69fae6-2d00-42e7-80f4-021c3638c043
 bic(m1)  # objective(m1) + dof(m1)*log(nobs(m1))
 
-# ╔═╡ 11adf098-f022-4207-b3e7-fe62d5766a9a
+# ╔═╡ 3838c638-9214-4ddd-b834-85dd1b2b1ce5
 md"## Fixed effects"
 
-# ╔═╡ 0ff6021c-e15d-40ba-b234-dc5143622456
+# ╔═╡ 25fb4af8-4c9b-4df4-9946-d870ed65a75a
 coeftable(m1)     # StatsBase.coeftable: fixed-effects statiscs; default level=0.95
 
-# ╔═╡ 1b822e97-9ef3-4b4d-837c-384e8f8050ba
-CSV.write("./data/m1_fe.csv", DataFrame(coeftable(m1)));
+# ╔═╡ 90cecc7a-6fee-41f8-9b59-971d236f4130
+Arrow.write("./data/m1_fe.arrow", DataFrame(coeftable(m1)));
 
-# ╔═╡ 27d94ddc-3bef-4866-b5b6-1b1139654bb6
+# ╔═╡ 4a2e0a60-1361-44db-a476-abcc3e2ced83
 # ... or parts of the table
 coef(m1)              # StatsBase.coef
 
-# ╔═╡ 1224c0cb-9e0f-4e7a-8a88-eddfa808c9bd
+# ╔═╡ 20b9633d-1691-4c3b-9579-5355aac858d2
 fixef(m1)    # MixedModels.fixef: not the same as coef() for rank-deficient case
 
-# ╔═╡ 8f419441-e7e2-4aa9-8001-da4621bc40c8
+# ╔═╡ 274f3585-c78b-4900-a664-8ad588c3d59d
 m1.β                  # alternative extractor
 
-# ╔═╡ a1515e14-20b5-4cd7-9563-c4599fa35083
+# ╔═╡ 1b60d8f0-70bf-410b-9785-f30119ff6908
 fixefnames(m1)        # works also for coefnames(m1)
 
-# ╔═╡ 42f609a2-aef2-4a01-a9aa-d5105892a36c
+# ╔═╡ 2cc9f330-dcd8-40a1-8839-b81dbc99c08f
 vcov(m1)   # StatsBase.vcov: var-cov matrix of fixed-effects coefficients
 
-# ╔═╡ f80b483d-ee15-4fff-92e4-a0a33bd5137f
+# ╔═╡ ed5667e4-7691-451e-9c7b-4ddd367c4d48
 vcov(m1; corr=true) # StatsBase.vcov: correlation matrix of fixed-effects coefficients
 
-# ╔═╡ 9f4f2040-ca2d-42a1-ab1a-809f05d959b6
+# ╔═╡ 973da4fc-3d95-469b-868b-33d933c43957
 stderror(m1)          # StatsBase.stderror: SE for fixed-effects coefficients
 
-# ╔═╡ ac9b5a2a-2a49-405e-a486-5be7e577aaf4
+# ╔═╡ da417df8-c674-4035-bb62-3c59ba18e349
 propertynames(m1)  # names of available extractors
 
-# ╔═╡ ec3ae437-e8b5-481d-b403-e739c8dfb36e
+# ╔═╡ a55dc7ed-2e34-4fdf-a51b-b4c170538a89
 md"""
 ## Parameter estimates of random-effect structure 
 
 Aka: covariance parameter estimates
 """
 
-# ╔═╡ 7065a0c8-e0d9-4d67-8467-a4bf57ae283a
+# ╔═╡ e48923d7-be76-45bd-98de-cbecd82f4640
 BlockDescription(m1) #  Description of blocks of A and L in a LinearMixedModel
 
-# ╔═╡ 4d98627b-77d7-400e-bd59-3f23ef4fef35
+# ╔═╡ 12ce94a6-4e04-40cd-bbad-2f5e8a766f77
 VarCorr(m1) # MixedModels.VarCorr: estimates of random-effect structure (RES)
 
-# ╔═╡ 646d3b14-45b8-4a2a-93f1-61685108eaef
-# ... or parts of the table
+# ╔═╡ 55e8ac8e-2c95-4e96-921f-4a3a79fa17f9
 #propertynames(m1)
 m1.σ     # residual; m1.sigma, MixedModels.sdest(m1), sqrt(MixedModels.varest(m1))
 
-# ╔═╡ 469efe6d-5018-4ad5-bc5a-ac191cba9be6
+# ╔═╡ 18daa693-e91f-4f72-a551-5c2e7d040de6
 m1.σs    # VCs; m1.sigmas
 
-# ╔═╡ b44b006f-7556-42a8-8bcb-096b575fa305
+# ╔═╡ 9ee525bb-a497-4796-94f2-418f81e8c53b
 m1.θ     # Parameter vector for RES (w/o residual); m1.theta
 
-# ╔═╡ 2bd21aee-e488-4c09-b4de-efc24ceec9c9
-md"""
-*DB: There's something interesting here.  The s.d. of the intercept for child is almost exactly the same as the residual s.d.*
-"""
-
-# ╔═╡ ad27c2df-3276-4e38-a667-dc83460bd845
-md"""
-*RK: I had not noticed this before, but individual differences in children's physical fitness are much larger than any other effect I have seen for these data.*
-"""
-
-# ╔═╡ cea0b827-13ec-4db3-877c-47ffe3c5e2ac
+# ╔═╡ 7f1928ee-91d8-41f9-8e1c-44c35fc33fd9
 ## check singularity
 issingular(m1) # Test if model is singular for paramter vector m1.theta (default)
 
-# ╔═╡ 77d6e8c6-173c-4a61-ad23-61620796246b
+# ╔═╡ d1b850d4-9a24-4aae-abb6-69775d988044
 md"## Effects PCA w/ CPs"
 
-# ╔═╡ d06708d6-357a-48af-8ab6-5c4d4cd3483d
-m1_pca=MixedModels.PCA(m1, corr=true);
+# ╔═╡ 8c5c4899-a95e-48a9-b5e3-8b7adf133bad
+m1_pca=MixedModels.PCA(m1, corr=true)
 
-# ╔═╡ ef4059a9-8755-4ab4-b3ff-923fbad3a600
-m1_pca.Child
-
-# ╔═╡ 6c4f7b49-fa7a-481f-bc0d-60b959904f30
-m1_pca.School
-
-# ╔═╡ 3e8cb766-ba13-4bff-99e5-17b4517e2d08
+# ╔═╡ b8173318-33b4-4e40-82ef-87ab43f92a03
 md"""
 # LMM with CPs for scores of Test (Table 3)
 
@@ -302,55 +278,52 @@ md"""
 + This is a reparameterized version of the reference LMM `m1`.
 """
 
-# ╔═╡ 0696b522-cf74-49dc-b4bd-57092cf231a2
-f1L = @formula zScore ~ 1 + Test*a1*Sex +
-      (0+Test+a1+Sex | School) +  (0+Test | Child) + (1 | Cohort);
+# ╔═╡ 4cbdd3b4-519d-437e-83ea-b949ebedaf8e
+f1L = @formula zScore ~ 0 + Test * (age - 8.5) * Sex +
+      (0+Test+(age-8.5)+Sex | School) +  (0+Test | Child) + (1 | Cohort);
 
-# ╔═╡ 39b4e0b9-63d0-4920-8442-8646b0da665c
+# ╔═╡ 75337b24-3809-4130-bd21-7d36718c1ad1
 m1L = fit(MixedModel, f1L, dat, contrasts=contr)
 
-# ╔═╡ cd7f295a-e009-42da-bc72-1581fef855a0
+# ╔═╡ 81e6a46c-a252-4563-9b06-18295e060afa
 m1L_pca=MixedModels.PCA(m1L, corr=true)
 
-# ╔═╡ 32b773ac-4790-4d42-9753-d00f6f5fc7c0
+# ╔═╡ a4929cf8-0aa6-4c03-b95e-948c1fe72c20
 md"""
 - Seems to indicate that a1 term in School random effects can be removed
 - Exposes a deficiency in the layout of the results in that `Test: Run` occurs in the random effects standard deviations but not in the fixed effects, so it is not in the table.
 - Perhaps use `0 + ` in the fixed-effects too
 """
 
-# ╔═╡ fb2817e2-6b2e-4093-8d60-47eff6b92a5e
+# ╔═╡ d5e71a82-1527-470b-99ea-5e7374331098
 md"""
 ## Compare objective of m1 and m1L
  
 m1L is a reparameterization of m1, so should be the same - in practice, should be close.
 """
 
-# ╔═╡ 63cd80d5-4204-4f4f-afc6-05808f9bd0ff
+# ╔═╡ 83f98594-6c29-4208-b956-7c98156ffb7e
 (objective(m1), objective(m1L))
 
-# ╔═╡ f21e0860-1aff-4e70-a58d-fd25be5e6026
+# ╔═╡ d0053d8a-6ef9-47c0-b5b5-18ba57503b5a
 md"""
 ## Conditional modes of random effects
 
 ### Extraction
 """
 
-# ╔═╡ 01873fcb-bca5-4403-96dc-ccf80a281666
+# ╔═╡ 6a9657f3-0ab8-4622-8e82-ffaa2d98276a
 begin
 	cmL = raneftables(m1L);          # better: NamedTuple of columntables
 
-	ChildL  = DataFrame(cmL.Child);  # also: Child_v2 = DataFrame(first(raneftables(m1))); 
-	CSV.write("./data/fggk21_ChildL.csv", ChildL);
+	ChildL  = DataFrame(cmL.Child)
+	Arrow.write("./data/fggk21_ChildL.arrow", ChildL, compress=:zstd)
 
-	SchoolL = DataFrame(cmL.School); # but no extractor for columntables between first and last;
-	CSV.write("./data/fggk21_SchoolL.csv", SchoolL);
+	SchoolL = DataFrame(cmL.School)
+	Arrow.write("./data/fggk21_SchoolL.arrow", SchoolL, compress=:zstd)
 end
 
-# ╔═╡ d75528a3-d9e3-4143-ac8d-f15f67b9a357
-md"- *Perhaps save these as Arrow files instead of CSV?*"
-
-# ╔═╡ cf08b244-5846-4b0a-9320-d32f8c022e03
+# ╔═╡ 2d315308-ade1-4bbd-8d2d-3946716b8bef
 md"""
 ### Caterpillar plots
 
@@ -366,18 +339,18 @@ md"""
 + This is a reparameterized version of the reference LMM `m1`.
 """
 
-# ╔═╡ 00a13746-0e2b-4049-a723-420970bd6f04
-f1_nested = @formula zScore ~ 0 + Test & (a1*Sex) +
-            (0+Test+a1+Sex | School) +  (0+Test | Child) + (1 | Cohort);
+# ╔═╡ 1a2f9eb0-fa82-4e02-8d30-8dd420c5c161
+f1_nested = @formula zScore ~ 0 + Test & ((age - 8.5)*Sex) +
+            (0+Test+(age - 8.5)+Sex | School) +  (0+Test | Child) + (1 | Cohort);
 
-# ╔═╡ 168625b8-ba19-4214-ac91-89e7e066a24f
+# ╔═╡ 44b97bbe-0785-492b-908c-b0a687a8ff54
 m1_nested = fit(MixedModel, f1_nested, dat, contrasts=contr)
 
-# ╔═╡ 03cf23fc-6fdb-45ad-be38-dc61dca27d6e
+# ╔═╡ 0edfc56d-939c-41f3-82b0-8e0af6e97bef
 # compare objective - m1_nested is a reparameterization of m1
 (m1.objective, m1_nested.objective)
 
-# ╔═╡ 3bb9bf27-80f4-4e09-8f21-49c3bea4c28f
+# ╔═╡ 3fa58e82-d558-4974-b91f-26ba95c4c31d
 md"""
 None of the five interaction terms is significant.
 
@@ -386,24 +359,24 @@ None of the five interaction terms is significant.
 Check whether adding quadratic trends of age to the reference LMM increases the goodness of fit.
 """
 
-# ╔═╡ a91cb555-3c8d-45af-9fc7-0b1708c21aa5
-f1_agesq = @formula zScore ~ 1 + Test*(a1+a2)*Sex  +
-           (1+Test+a1+Sex | School) +  (1+Test | Child) + (1 | Cohort);
+# ╔═╡ 76af96e1-4157-40d3-a44e-193b74bf3f72
+f1_agesq = @formula zScore ~ 1 + Test * ((age-8.5)+abs2(age-8.5)) * Sex  +
+           (1+Test+(age-8.5)+Sex | School) +  (1+Test | Child) + (1 | Cohort);
 
-# ╔═╡ 22fa298b-e42e-4429-b1d0-f36703909b2a
+# ╔═╡ ced3957b-ddcf-48cb-bfc3-c8c44749d966
 m1_agesq = fit(MixedModel, f1_agesq, dat, contrasts=contr)
 
-# ╔═╡ 67c05bfc-7690-46d7-b9d3-43162f5bfe98
+# ╔═╡ f10c2447-dfa5-4217-b2ff-7fdaac1bea92
 MixedModels.likelihoodratiotest(m1, m1_agesq)
 
-# ╔═╡ abf1b03d-f282-4065-8fe4-86d4c9ac8461
+# ╔═╡ 15f75cc0-2135-45d4-b2e0-a834ac19710a
 mods3 = [m1, m1_agesq];
 
-# ╔═╡ d0070d36-fbb8-4684-ab18-aecb19a8ffa0
+# ╔═╡ 07755170-242d-47a6-a3b9-0efc3479f490
 DataFrame(dof=dof.(mods3), deviance=deviance.(mods3), AIC=aic.(mods3),
 	AICc=aicc.(mods3), BIC=bic.(mods3))
 
-# ╔═╡ df41f644-2ba0-4e4f-bd4d-ce68d7daa624
+# ╔═╡ 90d22c96-178c-4754-8cb8-39bf1064bf3d
 md"""
 Adding quadratic trends of age to the fixed effects does not increase the goodness of fit.
 
@@ -412,124 +385,86 @@ Adding quadratic trends of age to the fixed effects does not increase the goodne
 # Transfer (some) model objects to RCall
 """
 
-# ╔═╡ dc4c851a-d2a8-457c-94b2-4bfce4244f3f
-begin
-	R"require('lme4')"
+# ╔═╡ c8a80ac2-af56-4503-b05d-d727d7bcac12
 
-	m1_j = Tuple([m1, dat]);
-	@rput m1_j;
-
-
-	R"save(m1_j, file='./fits/m1_j.rda')"
-end;
-
-# ╔═╡ 8e6419a5-879e-4522-b368-b627b3e4be06
-md"""
-# Temporary storage of model object
-
-Julia’s built-in serialize/deserialize is not guaranteed to work across 
-versions of packages or Julia. Use for saving and restoring data add 
-model objects between sessions or for sending them to parallel workers.
-
-# Julia and Package Versions
-
-Not sure how to make this work.  At present the output goes to the process where `Pluto.run()` was executed.
-"""
-
-# ╔═╡ b2e8b812-918d-46fa-90f8-f4cc3246c640
-begin
-	Pkg.status()
-end
-
-# ╔═╡ 8855c4fe-f3f3-4f2b-bae8-ca7ff2d4bfe0
-versioninfo()
 
 # ╔═╡ Cell order:
-# ╟─07197c6c-9628-11eb-3be8-092b8787a84e
-# ╠═4b4967d8-d6fe-403b-9fed-c7f95d9d6920
-# ╠═f5e09c62-9762-411c-ab71-255083c173a1
-# ╠═dce799c0-38cf-46ae-ab36-1e620989dcea
-# ╠═37539bd0-c9ad-4946-b024-9df1d77373ef
-# ╠═f3ad7942-a561-4570-97c6-05b76e9017d1
-# ╟─55f5f753-d335-4870-a11c-3279bacc61b3
-# ╠═b2c182fd-ca35-47a4-a89f-10c7574ad26f
-# ╠═15163958-681f-4a60-b059-84624063f882
-# ╟─37abc84c-fff1-42ed-8f37-85231cf70927
-# ╠═045f6831-7a7e-486d-bb7a-3f1aa45cfdcd
-# ╠═5ca91c64-5311-4ccc-bd33-3310e9175d3d
-# ╠═6da0675d-48b8-4c7f-a243-457bdf82eb59
-# ╠═5e1b3620-d0b6-4105-8a06-22bb3d74e425
-# ╟─15cb2be4-f990-4c0b-a43f-c0494a87bb9d
-# ╠═e6ba5c01-f6d5-4733-89d2-d1c81e505dab
-# ╠═90c7639c-9807-4655-be6a-d6ee46c47bbd
-# ╠═614b4261-b4de-45d5-9188-d7e7b623e562
-# ╟─75605d98-3a07-482d-9a4c-57a275979475
-# ╠═124bf317-f541-46d3-9aa6-e654d22b6ed7
-# ╠═494df60f-1d3e-4d4b-a658-ec83f831fe23
-# ╠═286b3890-7261-4540-8db3-7efe0322b411
-# ╠═c6ee4d76-6608-4eba-871c-68c63d63e059
-# ╟─31e4f4eb-05dc-4cc1-91d5-e7fee1f65012
-# ╠═e5c2561b-8110-405c-af77-2603f3c58ed4
-# ╠═60cc13e4-3495-43f7-8a14-a531c03e39f4
-# ╠═0a41a7f9-bbfe-4612-a40f-dcc61d6d69f1
-# ╟─98174664-ce99-487f-930d-9304c0510863
-# ╠═e52d2680-9bb5-41e4-a39f-9271c575fbeb
-# ╠═483bfe90-d570-43f7-8590-8f48ac6b8bb4
-# ╟─7c0ef836-d570-47e6-9f1d-b48327381fc2
-# ╠═40dde025-1e61-47a4-ade1-cbbec7ca73e0
-# ╠═734f8fe3-d2ed-4219-82c0-515e00ef08ee
-# ╠═1b13c2df-c5a9-42c1-b72c-4d066b40933a
-# ╠═f7e372ee-7058-4519-b165-ee033a4c4565
-# ╠═2f14e5bb-b5d1-4caf-a21d-4c15a7ab1388
-# ╠═3f934f0a-3e05-447a-84b6-466c314281ce
-# ╠═96f9cc2d-a016-4f8e-8cbc-c94b1386729d
-# ╟─11adf098-f022-4207-b3e7-fe62d5766a9a
-# ╠═0ff6021c-e15d-40ba-b234-dc5143622456
-# ╠═1b822e97-9ef3-4b4d-837c-384e8f8050ba
-# ╠═27d94ddc-3bef-4866-b5b6-1b1139654bb6
-# ╠═1224c0cb-9e0f-4e7a-8a88-eddfa808c9bd
-# ╠═8f419441-e7e2-4aa9-8001-da4621bc40c8
-# ╠═a1515e14-20b5-4cd7-9563-c4599fa35083
-# ╠═42f609a2-aef2-4a01-a9aa-d5105892a36c
-# ╠═f80b483d-ee15-4fff-92e4-a0a33bd5137f
-# ╠═9f4f2040-ca2d-42a1-ab1a-809f05d959b6
-# ╠═ac9b5a2a-2a49-405e-a486-5be7e577aaf4
-# ╟─ec3ae437-e8b5-481d-b403-e739c8dfb36e
-# ╠═7065a0c8-e0d9-4d67-8467-a4bf57ae283a
-# ╠═4d98627b-77d7-400e-bd59-3f23ef4fef35
-# ╠═646d3b14-45b8-4a2a-93f1-61685108eaef
-# ╠═469efe6d-5018-4ad5-bc5a-ac191cba9be6
-# ╠═b44b006f-7556-42a8-8bcb-096b575fa305
-# ╠═2bd21aee-e488-4c09-b4de-efc24ceec9c9
-# ╠═ad27c2df-3276-4e38-a667-dc83460bd845
-# ╠═cea0b827-13ec-4db3-877c-47ffe3c5e2ac
-# ╟─77d6e8c6-173c-4a61-ad23-61620796246b
-# ╠═d06708d6-357a-48af-8ab6-5c4d4cd3483d
-# ╠═ef4059a9-8755-4ab4-b3ff-923fbad3a600
-# ╠═6c4f7b49-fa7a-481f-bc0d-60b959904f30
-# ╟─3e8cb766-ba13-4bff-99e5-17b4517e2d08
-# ╠═0696b522-cf74-49dc-b4bd-57092cf231a2
-# ╠═39b4e0b9-63d0-4920-8442-8646b0da665c
-# ╠═cd7f295a-e009-42da-bc72-1581fef855a0
-# ╟─32b773ac-4790-4d42-9753-d00f6f5fc7c0
-# ╟─fb2817e2-6b2e-4093-8d60-47eff6b92a5e
-# ╠═63cd80d5-4204-4f4f-afc6-05808f9bd0ff
-# ╟─f21e0860-1aff-4e70-a58d-fd25be5e6026
-# ╠═01873fcb-bca5-4403-96dc-ccf80a281666
-# ╟─d75528a3-d9e3-4143-ac8d-f15f67b9a357
-# ╟─cf08b244-5846-4b0a-9320-d32f8c022e03
-# ╠═00a13746-0e2b-4049-a723-420970bd6f04
-# ╠═168625b8-ba19-4214-ac91-89e7e066a24f
-# ╠═03cf23fc-6fdb-45ad-be38-dc61dca27d6e
-# ╟─3bb9bf27-80f4-4e09-8f21-49c3bea4c28f
-# ╠═a91cb555-3c8d-45af-9fc7-0b1708c21aa5
-# ╠═22fa298b-e42e-4429-b1d0-f36703909b2a
-# ╠═67c05bfc-7690-46d7-b9d3-43162f5bfe98
-# ╠═abf1b03d-f282-4065-8fe4-86d4c9ac8461
-# ╠═d0070d36-fbb8-4684-ab18-aecb19a8ffa0
-# ╟─df41f644-2ba0-4e4f-bd4d-ce68d7daa624
-# ╠═dc4c851a-d2a8-457c-94b2-4bfce4244f3f
-# ╟─8e6419a5-879e-4522-b368-b627b3e4be06
-# ╠═b2e8b812-918d-46fa-90f8-f4cc3246c640
-# ╠═62ab7f8a-119c-4f2d-abcf-86e5842a6fa8
-# ╠═8855c4fe-f3f3-4f2b-bae8-ca7ff2d4bfe0
+# ╠═d17d5cf8-988a-11eb-03dc-23f1449f5563
+# ╟─6ef1b0be-3f8e-4fbf-b313-004c3ba001bd
+# ╠═4cd88e2b-c6f0-49cb-846a-eaae9f892e02
+# ╠═d7ea6e71-b609-4a3c-8de6-b05e6cb0aceb
+# ╠═8e122db8-416c-4ee7-b3c2-6e829659a606
+# ╠═7dca92f9-dcc2-462c-b501-9ecabce74005
+# ╟─d813057a-ddce-4bd5-bf40-f15b71c6eeed
+# ╠═e41bb345-bd0a-457d-8d57-1e27dde43a63
+# ╠═baf13d52-1569-4077-af4e-40aa53d38cf5
+# ╟─153c3cb8-2488-4d70-9236-a5d4e47b6f1b
+# ╠═9a3aa079-5bba-49ef-af84-6fd3e82a1ee7
+# ╠═08763df8-aea2-4de7-bbb0-b4a1247c541a
+# ╠═a230a7d8-d4a7-4d5a-8e02-69d14ee157fc
+# ╠═dc38aff4-71a1-44e8-8154-a00efa9aa2cb
+# ╟─60f522a1-27aa-48fb-af89-83cb2ce38cae
+# ╠═0aac930e-4b2d-4b49-9590-1d21ca0b3217
+# ╠═7cb282db-37dd-497f-9d73-edc563a105ef
+# ╠═fb8f1bbf-7b7a-43b3-bedd-2977b533ffc4
+# ╟─81decdea-8d98-453b-8d2b-a5ded6d815fd
+# ╠═71c49ff4-e207-40f3-ba6c-ff5aa248557c
+# ╠═534cc633-a02c-4ede-9d4b-d7ad46e38fd3
+# ╠═804b8775-31ec-486f-88c6-0586d93c1666
+# ╠═bc72326f-0ecf-44d1-ba4f-688ae7361662
+# ╟─efaa575a-d03e-431b-a745-8553e095e111
+# ╠═ee1cad9d-ebc8-4bb6-918a-9d38f0cd2232
+# ╠═10c85aa3-9243-4c62-9041-90e78d27d3a9
+# ╠═327f3fd1-0118-4952-8e0d-0779f69ad819
+# ╟─2a5a7755-baf2-479e-9a57-4de137b5ecf3
+# ╠═4c0a5cac-913d-490e-aeb9-505d34d89b5c
+# ╠═8fbaf19e-869e-4cff-84a8-83023b572e87
+# ╠═ce5d4ea2-e687-4bd0-8377-d3bf21f99721
+# ╠═b955207b-d422-4579-b32c-e4273710d7ce
+# ╠═98766877-fe20-4fac-a689-dd66d476cd40
+# ╠═11291f17-1647-4b0f-8aad-26a24c75dfd1
+# ╠═36c392c0-548a-4cc6-8786-34e626a71cc3
+# ╠═7eb6ef49-ec67-4649-9d91-da4d90e82db7
+# ╠═755ea5ac-bf09-4ead-9f00-0c1eb973554e
+# ╠═bd69fae6-2d00-42e7-80f4-021c3638c043
+# ╟─3838c638-9214-4ddd-b834-85dd1b2b1ce5
+# ╠═25fb4af8-4c9b-4df4-9946-d870ed65a75a
+# ╠═90cecc7a-6fee-41f8-9b59-971d236f4130
+# ╠═4a2e0a60-1361-44db-a476-abcc3e2ced83
+# ╠═20b9633d-1691-4c3b-9579-5355aac858d2
+# ╠═274f3585-c78b-4900-a664-8ad588c3d59d
+# ╠═1b60d8f0-70bf-410b-9785-f30119ff6908
+# ╠═2cc9f330-dcd8-40a1-8839-b81dbc99c08f
+# ╠═ed5667e4-7691-451e-9c7b-4ddd367c4d48
+# ╠═973da4fc-3d95-469b-868b-33d933c43957
+# ╠═da417df8-c674-4035-bb62-3c59ba18e349
+# ╟─a55dc7ed-2e34-4fdf-a51b-b4c170538a89
+# ╠═e48923d7-be76-45bd-98de-cbecd82f4640
+# ╠═12ce94a6-4e04-40cd-bbad-2f5e8a766f77
+# ╠═55e8ac8e-2c95-4e96-921f-4a3a79fa17f9
+# ╠═18daa693-e91f-4f72-a551-5c2e7d040de6
+# ╠═9ee525bb-a497-4796-94f2-418f81e8c53b
+# ╠═7f1928ee-91d8-41f9-8e1c-44c35fc33fd9
+# ╟─d1b850d4-9a24-4aae-abb6-69775d988044
+# ╠═8c5c4899-a95e-48a9-b5e3-8b7adf133bad
+# ╟─b8173318-33b4-4e40-82ef-87ab43f92a03
+# ╠═4cbdd3b4-519d-437e-83ea-b949ebedaf8e
+# ╠═75337b24-3809-4130-bd21-7d36718c1ad1
+# ╠═81e6a46c-a252-4563-9b06-18295e060afa
+# ╟─a4929cf8-0aa6-4c03-b95e-948c1fe72c20
+# ╟─d5e71a82-1527-470b-99ea-5e7374331098
+# ╠═83f98594-6c29-4208-b956-7c98156ffb7e
+# ╟─d0053d8a-6ef9-47c0-b5b5-18ba57503b5a
+# ╠═6a9657f3-0ab8-4622-8e82-ffaa2d98276a
+# ╟─2d315308-ade1-4bbd-8d2d-3946716b8bef
+# ╠═1a2f9eb0-fa82-4e02-8d30-8dd420c5c161
+# ╠═44b97bbe-0785-492b-908c-b0a687a8ff54
+# ╠═0edfc56d-939c-41f3-82b0-8e0af6e97bef
+# ╟─3fa58e82-d558-4974-b91f-26ba95c4c31d
+# ╠═76af96e1-4157-40d3-a44e-193b74bf3f72
+# ╠═ced3957b-ddcf-48cb-bfc3-c8c44749d966
+# ╠═f10c2447-dfa5-4217-b2ff-7fdaac1bea92
+# ╠═15f75cc0-2135-45d4-b2e0-a834ac19710a
+# ╠═07755170-242d-47a6-a3b9-0efc3479f490
+# ╟─90d22c96-178c-4754-8cb8-39bf1064bf3d
+# ╠═c8a80ac2-af56-4503-b05d-d727d7bcac12
