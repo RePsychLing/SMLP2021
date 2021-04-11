@@ -80,6 +80,11 @@ begin
 	fig1
 end
 
+# ╔═╡ 5096682d-ac64-42ca-aab0-6c24d8cde711
+md"""
+_Figure 1._ Performance differences between 8.0 und 9.0 years by sex in the five physical fitness tests presented as z-transformed data computed separately for each test. Endurance = cardiorespiratory endurance (i.e., 6 min run test), Coordination = star run test, Speed = 20-m linear sprint test, PowerLOW = power of lower limbs (i.e., standing long jump test), PowerUP = power of upper limbs (i.e., ball push test), SD = standard deviation. Points are binned observed child means; lines are simple regression fits to the observations; 95% confidence intervals for means ≈ 0.05 are not visible.
+"""
+
 # ╔═╡ 59afbe0c-0c70-4fc5-97f1-5020ef33b5cc
 md"""
 ## Contrast coding
@@ -366,6 +371,7 @@ Have fun!
 # ╠═40300e47-3092-43fd-9fb3-a28fa1df215a
 # ╟─c3adec52-87b3-4655-9b5e-1936fcfb2877
 # ╠═8318ac96-92a7-414d-8611-f1830642539a
+# ╟─5096682d-ac64-42ca-aab0-6c24d8cde711
 # ╟─59afbe0c-0c70-4fc5-97f1-5020ef33b5cc
 # ╠═a7d67c88-a2b5-4326-af67-ae038fbaeb19
 # ╠═e41bb345-bd0a-457d-8d57-1e27dde43a63
