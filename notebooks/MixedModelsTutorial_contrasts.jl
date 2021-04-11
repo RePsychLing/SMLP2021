@@ -13,9 +13,12 @@ end
 
 # ╔═╡ 4cd88e2b-c6f0-49cb-846a-eaae9f892e02
 begin
-	using Arrow, DataAPI, DataFrames, MixedModels, StatsBase
+	using Arrow, DataAPI, DataFrames, MixedModels
 	using DataAPI: levels
 end
+
+# ╔═╡ 40300e47-3092-43fd-9fb3-a28fa1df215a
+using ImageIO, Images, ImageMagick
 
 # ╔═╡ 6ef1b0be-3f8e-4fbf-b313-004c3ba001bd
 md"""
@@ -59,8 +62,23 @@ levels(dat.Test)
 # ╔═╡ f51a7baf-a68e-4fae-b62d-9adfbf2b3412
 levels(dat.Sex)
 
-# ╔═╡ d5a79b7a-10d4-4fec-9952-42313c220363
-md"""Test levels are not in order; Sex labels should be changed, too."""
+# ╔═╡ 924e86cc-d799-4ed9-ac89-34be0b4872ed
+md"""
+## Plot the main results
+
+We need to set up Pluto to display imgages.
+"""
+
+# ╔═╡ c3adec52-87b3-4655-9b5e-1936fcfb2877
+md"""
+The main results of relevance for this tutorial are shown in this figure from Fühner et al. (2021, Figure 2). There are developmental gains within the ninth year of life for each of the five tests and the tests differ in the magnitude of these gains. Also boys outperform girls on each test and, again, the sex difference varies across test.
+"""
+
+# ╔═╡ 8318ac96-92a7-414d-8611-f1830642539a
+begin
+	fig1 = load("./figures/Figure_2.png");
+	fig1
+end
 
 # ╔═╡ 59afbe0c-0c70-4fc5-97f1-5020ef33b5cc
 md"""
@@ -104,10 +122,62 @@ contr1 = merge(
 	   )
 
 # ╔═╡ e41bb345-bd0a-457d-8d57-1e27dde43a63
-f_ovi = @formula zScore ~ 1 + Test + (1 | Child);
+f_ovi1 = @formula zScore ~ 1 + Test + (1 | Child);
 
 # ╔═╡ baf13d52-1569-4077-af4e-40aa53d38cf5
-m_ovi_SeqDiff = fit(MixedModel, f_ovi, dat, contrasts=contr1)
+m_ovi1_SeqDiff = fit(MixedModel, f_ovi1, dat, contrasts=contr1)
+
+# ╔═╡ d0b2bb2c-8e01-4c20-b902-e2ba5abae7cc
+md"""
+The differences between tests identified by the contrasts are actually spurious because all tests were standardized to a mean of zero. The differences are due to an imbalance with respect to the number of boys and girls and the number of observations for each test. Moreover, given the large sample of 108,925 children, the authors had set the level of significance to |z| = 3.0.
+
+The primary interest in this study relates to interactions of these test contrasts with `Sex` and `age`. In other words, are the differences between tests different for boys and girls and are they different for the young (< 8.5 years) and older (>= 8.5) children who are all in their ninth year of life. The age effect is estimated as the gain between 8.0 and 9.0 years of age.  
+
+First, we add Sex and its interaction with the four test contrasts: 
+"""
+
+# ╔═╡ 8af679d3-e3f7-484c-b144-031354232388
+begin
+	f_ovi_2 = @formula zScore ~ 1 + Test*Sex + (1 | Child);
+	m_ovi_SeqDiff_2 = fit(MixedModel, f_ovi_2, dat, contrasts=contr1)
+end
+
+# ╔═╡ 6b2bf9ad-1037-4261-876d-5f08b392a88c
+md"""
+The difference between boys and girls is larger for `Run` and `S20_r` than for  `Star_r` (i.e., Est. = -.1199 and .0388), respectively. Boys outperform girls more on `SLJ` than on `S20_r` (0.0348) as well as on `BPT` compared to `SLJ` (0.1444). 
+
+We note that the standard errors are anti-conservative because the LMM is missing a lot of information in the RES (e..g., contrast-related VCs snd CPs for `Child`, `School`, and `Cohort`.
+
+Next we add the linear cross-sectional age-effect and its interactions with the four test contrasts.
+"""
+
+# ╔═╡ bb8a8f47-4f5b-4bc2-9b75-1c75927e3b92
+begin
+	f_ovi_3 = @formula zScore ~ 1 + Test*(Sex+(age - 8.5)) + (1 | Child);
+	m_ovi_SeqDiff_3 = fit(MixedModel, f_ovi_3, dat, contrasts=contr1)
+end
+
+# ╔═╡ 424c7ed0-7f5b-4579-980f-989f7d43bc97
+md"""
+The difference between older and younger childrend is larger for `Star_r` than for `Run` (0.2405) and  `Star_r` and  `S20_r` did not differ significantly (-0.0242).  . The gain was larger for `S20_r` than for `SLJ` (-0.0640) The largest difference in developmental gain was between `BPT` and `SLJ` (0.3379). 
+
+Again, please note that the standard errors are anti-conservative because the LMM is missing a lot of information in the RES (e..g., contrast-related VCs snd CPs for `Child`, `School`, and `Cohort`.
+
+In a final step, we add the interaction of the four test contrasts with the interaction of `Sex` and the linear effect of `age`. Such interaction would indicate that boys and girls develop differently for different tests. The authors hypothesized that physical fitness might pick up a prepubertal signal (i.e., sexual hormones start to rise in the ninth year of girls' lives,  but not yet boys') and that this would lead to larger developmental gain for girls than boys.
+"""
+
+# ╔═╡ 9cb34e96-bf04-4d1a-962f-d98bb8429592
+begin
+	f_ovi = @formula zScore ~ 1 + Test*Sex*(age - 8.5) + (1 | Child);
+	m_ovi_SeqDiff = fit(MixedModel, f_ovi, dat, contrasts=contr1)
+end
+
+# ╔═╡ 7de8eb1d-ce24-4e9f-a748-d0a266ea8428
+md"""
+The results are very clear: Despite an abundance of statistical power there is no evidence for the differences between boys and girls in how much the gain within the ninth year of life in these five physical fitness tests. The authors argue that in this case absence of evidence looks very much like evidence of absence of a hypothesized interaction. 
+
+In the next two sections we use different contrasts. Does this have a bearing on this result?  We still ignore for now that we are looking at anti-conservative test statistics.
+"""
 
 # ╔═╡ e84051c6-61af-4c3a-a0c4-c1649c8fd2bf
 md"""
@@ -145,9 +215,14 @@ contr2 = merge(
 # ╔═╡ c8a80ac2-af56-4503-b05d-d727d7bcac12
 m_ovi_Helmert = fit(MixedModel, f_ovi, dat, contrasts=contr2)
 
+# ╔═╡ 9cfbcdf1-e78f-4e68-92b7-7761331d3972
+md"""
+We forgo a detail re-statement of the effects, but note that again none of the interactions between `age x Sex` with the four test contrasts was significant.
+"""
+
 # ╔═╡ a272171a-0cda-477b-9fb1-32b249e1a2c8
 md"""
-### Special _HypothesisCoding_: `contr3`
+### _HypothesisCoding_: `contr3`
 
 The third set of contrasts uses _HypothesisCoding_. _Hypothesis coding_ allows the user to specify their own _a priori_ contrast matrix, subject to the mathematical constraint that the matrix has full rank. For example, sport scientists agree that the first four tests can be contrasts with `BPT`,  because the difference is akin to a correction of overall physical fitness. However, they want to keep the pairwise comparisons for the first four tests. 
 
@@ -171,6 +246,11 @@ contr3 = merge(
 # ╔═╡ 61f7ddca-27d0-4f4f-bac9-d757d19faa39
 m_ovi_Hypo = fit(MixedModel, f_ovi, dat, contrasts=contr3)
 
+# ╔═╡ f36bfe9b-4c7d-4e43-ae0f-56a4a3865c9c
+md""""
+None of the interactions between age x Sex with the four test contrasts was significant for these contrasts.
+"""
+
 # ╔═╡ 830b5655-50c0-425c-a8de-02743867b9c9
 md"""
 ## Other topics
@@ -193,7 +273,7 @@ Trivially, the meaning of a contrast depends on its definition. Consequently, th
 
 # ╔═╡ 61e9e6c3-31f5-4037-b0f0-40b82d1d8fdc
 begin
-	f_Child = @formula zScore ~ 1 + Test + (1 + Test | Child);
+	f_Child = @formula zScore ~ 1 + Test*Sex*(age - 8.5) + (1 + Test | Child);
 	m_Child_SeqDiff = fit(MixedModel, f_Child, dat, contrasts=contr1);
 	m_Child_Helmert = fit(MixedModel, f_Child, dat, contrasts=contr2);
 	m_Child_Hypo = fit(MixedModel, f_Child, dat, contrasts=contr3);
@@ -211,12 +291,14 @@ VarCorr(m_Child_Hypo)
 # ╔═╡ 65c10c72-cbcf-4923-bdc2-a23aa6ddd856
 md"""
 ### VCs and CPs depend on random factor
-VCs and CPs resulting from a set of test contrasts can also be estimated for the random factor `School`. Of course, these VCs and CPs may look different from the ones we just estimated for `Child`.
+VCs and CPs resulting from a set of test contrasts can also be estimated for the random factor `School`. Of course, these VCs and CPs may look different from the ones we just estimated for `Child`. 
+
+`Sex` and `age` vary within `School`. Therefore, we also include their VCs and CPs in this model.
 """
 
 # ╔═╡ 9f1d9769-aab3-4e7f-9dc0-6032361d279f
 begin
-	f_School = @formula zScore ~ 1 + Test + (1 + Test | School);
+	f_School = @formula zScore ~  1 + Test*Sex*(age - 8.5) + (1 + Test + Sex + (age -8.5) | School);
 	m_School_SeqDiff = fit(MixedModel, f_School, dat, contrasts=contr1);
 	m_School_Helmert = fit(MixedModel, f_School, dat, contrasts=contr2);
 	m_School_Hypo = fit(MixedModel, f_School, dat, contrasts=contr3);
@@ -231,6 +313,47 @@ VarCorr(m_School_Helmert)
 # ╔═╡ c47058ac-31e6-4b65-8116-e313049f6323
 VarCorr(m_School_Hypo)
 
+# ╔═╡ 4cdaecad-e0b4-400f-ae11-b5cbba101166
+md"""
+## Fine tuning the RES for `School`
+The VCs and CPs for `Sex` are comparatively small. Do we need them? We check.
+"""
+
+# ╔═╡ 4ac9dd5c-d601-4e00-8ad1-cc9ce71ce6cf
+begin
+	f_School_nosex = @formula zScore ~  1 + Test*Sex*(age - 8.5) + (1 + Test + (age -8.5) | School);
+	m_School_SeqDiff_nosex = fit(MixedModel, f_School_nosex, dat, contrasts=contr1);
+	VarCorr(m_School_SeqDiff)
+	MixedModels.likelihoodratiotest(m_School_SeqDiff, m_School_SeqDiff_nosex)
+end
+
+# ╔═╡ 11684c80-f816-4d02-a213-0710934334ae
+md""" Ok, we do. How about just keeping the VC and dropping the CPs?"""
+
+# ╔═╡ ef535d84-c720-46e1-b8cc-424c45506d9c
+begin
+	f_School_nosexCP = @formula zScore ~  1 + Test*Sex*(age - 8.5) + (1 + Test + (age -8.5) | School) + (0 + Sex | School);
+	m_School_SeqDiff_nosexCP = fit(MixedModel, f_School_nosexCP, dat, contrasts=contr1);
+	VarCorr(m_School_SeqDiff)
+	MixedModels.likelihoodratiotest(m_School_SeqDiff, m_School_SeqDiff_nosexCP)
+end
+
+# ╔═╡ f50733eb-653f-4a93-a401-cb65ec0ccb41
+md"""Clearly, with sex-relatd CPs for `School` we are only fitting noise.
+
+This is what the parsimonious RES looks like.
+"""
+
+# ╔═╡ 27fd45a5-608d-41e3-bd30-fb974e1368cc
+	VarCorr(m_School_SeqDiff_nosexCP)
+
+# ╔═╡ e84d2f33-ab76-4cd9-989c-0d27a22907ce
+md"""
+That's it for this tutorial. It is time to try you own contrast coding. You can use these data; there are many alternatives to set up hypotheses for the five tests. Of course and even better, code up some contrasts for data of your own.
+
+Have fun!
+"""
+
 # ╔═╡ Cell order:
 # ╠═d17d5cf8-988a-11eb-03dc-23f1449f5563
 # ╟─6ef1b0be-3f8e-4fbf-b313-004c3ba001bd
@@ -239,17 +362,29 @@ VarCorr(m_School_Hypo)
 # ╟─f710eadc-15e2-4911-b6b2-2b97d9ce7e3e
 # ╠═bea880a9-0513-4b70-8a72-af73fb83bd19
 # ╠═f51a7baf-a68e-4fae-b62d-9adfbf2b3412
-# ╟─d5a79b7a-10d4-4fec-9952-42313c220363
+# ╠═924e86cc-d799-4ed9-ac89-34be0b4872ed
+# ╠═40300e47-3092-43fd-9fb3-a28fa1df215a
+# ╟─c3adec52-87b3-4655-9b5e-1936fcfb2877
+# ╠═8318ac96-92a7-414d-8611-f1830642539a
 # ╟─59afbe0c-0c70-4fc5-97f1-5020ef33b5cc
 # ╠═a7d67c88-a2b5-4326-af67-ae038fbaeb19
 # ╠═e41bb345-bd0a-457d-8d57-1e27dde43a63
 # ╠═baf13d52-1569-4077-af4e-40aa53d38cf5
+# ╟─d0b2bb2c-8e01-4c20-b902-e2ba5abae7cc
+# ╠═8af679d3-e3f7-484c-b144-031354232388
+# ╟─6b2bf9ad-1037-4261-876d-5f08b392a88c
+# ╠═bb8a8f47-4f5b-4bc2-9b75-1c75927e3b92
+# ╟─424c7ed0-7f5b-4579-980f-989f7d43bc97
+# ╠═9cb34e96-bf04-4d1a-962f-d98bb8429592
+# ╟─7de8eb1d-ce24-4e9f-a748-d0a266ea8428
 # ╟─e84051c6-61af-4c3a-a0c4-c1649c8fd2bf
 # ╠═7dca92f9-dcc2-462c-b501-9ecabce74005
 # ╠═c8a80ac2-af56-4503-b05d-d727d7bcac12
+# ╟─9cfbcdf1-e78f-4e68-92b7-7761331d3972
 # ╟─a272171a-0cda-477b-9fb1-32b249e1a2c8
 # ╠═9f8a0809-0189-480b-957a-3d315763f8a4
 # ╠═61f7ddca-27d0-4f4f-bac9-d757d19faa39
+# ╟─f36bfe9b-4c7d-4e43-ae0f-56a4a3865c9c
 # ╟─830b5655-50c0-425c-a8de-02743867b9c9
 # ╠═6492eb08-239f-42cd-899e-9e227999d9e3
 # ╟─74d7a701-91cf-4dd1-9991-f94e156c3291
@@ -262,3 +397,10 @@ VarCorr(m_School_Hypo)
 # ╠═cbd98fc6-4d7e-42f0-84d0-525ab947187a
 # ╠═d8bcb024-a971-47d6-a3f3-9eff6f3a9386
 # ╠═c47058ac-31e6-4b65-8116-e313049f6323
+# ╟─4cdaecad-e0b4-400f-ae11-b5cbba101166
+# ╠═4ac9dd5c-d601-4e00-8ad1-cc9ce71ce6cf
+# ╟─11684c80-f816-4d02-a213-0710934334ae
+# ╠═ef535d84-c720-46e1-b8cc-424c45506d9c
+# ╟─f50733eb-653f-4a93-a401-cb65ec0ccb41
+# ╠═27fd45a5-608d-41e3-bd30-fb974e1368cc
+# ╟─e84d2f33-ab76-4cd9-989c-0d27a22907ce
