@@ -62,12 +62,22 @@ The next stage is a *group-apply-combine* operation to group the rows by `Sex`, 
 # ╔═╡ f27eab8e-5fbd-442c-b4a2-a95b4c29cd52
 df = combine(
 	groupby(
-		select(DataFrame(dat), :, :age => (x -> round.(x, digits=1)) => :rnd_age),
-		[:Sex, :Test, :rnd_age],
+		select(DataFrame(dat), :, :age => (x -> round.(x, digits=1)) => :age),
+		[:Sex, :Test, :age],
 	),
-	:zScore => mean,
+	:zScore => mean => :zScore,
 	:zScore => length => :n,
 )
+
+# ╔═╡ 27dbedac-3270-4c4b-ba42-3a99c6c54cba
+begin
+	using AlgebraOfGraphics: linear
+	design1 = mapping(:age, :zScore, color = :Sex, layout_x = :Test)
+	design2 = mapping(:age, :zScore, color = :Sex, layout_x = :Test)
+	lines = design1 * linear
+	means = design2 * visual(Scatter, markersize=5)
+	data(df) * means + data(dat) * lines |> draw
+end
 
 # ╔═╡ e61f86b4-2e9e-4522-af2f-b97097e4c95c
 md"""
@@ -76,10 +86,14 @@ md"""
 The `AlgebraOfGraphics` package applies operators to the results of functions such as `data` (specify the data table to be used), `mapping` (designate the roles of columns), and `visual` (type of visual presentation).
 """
 
-# ╔═╡ 999c343f-c0ee-4e91-9596-7f30ceca117c
-data(df) * 
-mapping(:rnd_age, :zScore_mean, layout_x=:Test, color = :Sex) *
-visual(Scatter) |> draw()
+# ╔═╡ d81256c0-fa19-4926-b723-795cc9f569bc
+md"""
++ Note: Using same design for dat and df does not work
++ TBD: Relabel factor levels (Boys, Girls; fitness components for Test)
++ TBD: Relevel factors; why not levels from table; use .RDS for now?
++ TBD: Set range (7.8 to 9.2 and tick marks (8, 8.5, 9) of axes
++ TBD: Move legend in plot? 
+"""
 
 # ╔═╡ Cell order:
 # ╠═a7aef68a-9adc-11eb-24a5-eda95afc54e6
@@ -93,4 +107,5 @@ visual(Scatter) |> draw()
 # ╟─fa5e6e67-d37b-414d-8f3a-34f623f423af
 # ╠═f27eab8e-5fbd-442c-b4a2-a95b4c29cd52
 # ╟─e61f86b4-2e9e-4522-af2f-b97097e4c95c
-# ╠═999c343f-c0ee-4e91-9596-7f30ceca117c
+# ╠═27dbedac-3270-4c4b-ba42-3a99c6c54cba
+# ╠═d81256c0-fa19-4926-b723-795cc9f569bc
