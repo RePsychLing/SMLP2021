@@ -83,21 +83,66 @@ md"Changing the sample size or clicking the `Resample` button will cause a new s
 begin
 	resample   # causes the block to be re-executed when button is pushed
 	samp = parametricbootstrap(sampsz, m1)
+	ap = DataFrame(samp.allpars)
 	DataFrame(shortestcovint(samp))  # 95% coverage intervals from the samples
 end
 
+# ╔═╡ 7fc05850-2ddc-4ebb-954a-7e2d6d3aeadf
+md"""
+### Density plots
+
+#### Fixed-effects parameters
+"""
+
 # ╔═╡ a6b61ca4-dcc0-4e3d-a8cb-9b2775d8b7b5
 begin
-	f = Figure(resolution = (1000, 500))
-	βnames = keys(first(samp.bstr).β)
-	df = DataFrame(samp.β)
-	axs = [Axis(f[1,i]) for i in eachindex(βnames)]
+	fβ = Figure(resolution = (1000, 500))
+	βs = filter(:type => ==("β"), ap)
+	βnames = unique(βs.names)
+	axsβ = [Axis(fβ[1,i]) for i in eachindex(βnames)]
 	for (i, k) in enumerate(βnames)
-		density!(axs[i], filter(:coefname => ==(k),df).β)
-		axs[i].xlabel = string(k)
+		density!(axsβ[i], filter(:names => ==(k),βs).value)
+		axsβ[i].xlabel = k
 	end
-	f
+	fβ
 end		
+
+# ╔═╡ d9156571-08c3-4855-9d6c-2331bd829f56
+md" #### Standard deviations of the random effects"
+
+# ╔═╡ 9b7b7eb1-02af-446d-8c01-c931ee1b05e6
+begin
+	fσs = Figure(resolution = (1000, 500))
+	dfσ = filter([:type, :group] => (t,g) -> (t == "σ" && g ≠ "residual"), ap)
+	σnames = unique(dfσ.names)	
+	axsσs = [Axis(fσs[1,i]) for i in eachindex(σnames)]
+	for (i, k) in enumerate(σnames)
+		density!(axsσs[i], filter(:names => ==(k),dfσ).value)
+		axsσs[i].xlabel = string(k)
+	end
+	fσs
+end		
+
+# ╔═╡ c5c7c3b0-4809-41d7-b94d-2bedd1febbcc
+md" #### Residual standard deviation and correlation"
+
+# ╔═╡ 824d488e-ad43-4473-8f51-7a6a9863d3b3
+begin
+	fσ = Figure(resolution = (1000, 500))
+	axsσ = Axis(fσ[1,1])
+	density!(axsσ, samp.σ)
+	axsσ.xlabel = "Residual standard deviation"
+	axsρ = Axis(fσ[1,2])
+	ρvals = filter(isfinite, filter(:type => ==("ρ"), ap).value)
+	hist!(axsρ, ρvals, bins=50, normalization=:density)
+	axsρ.xlabel = "Within-subject correlation"
+	fσ
+end
+
+# ╔═╡ 39fe02d6-f461-4075-aa44-c684f870d635
+md"""
+The within-subject correlation estimates are shown as a histogram rather than a density plot because of the spike at 1.
+"""
 
 # ╔═╡ Cell order:
 # ╟─df4a9698-1805-438e-9da5-63532874fc9a
@@ -115,4 +160,10 @@ end
 # ╟─72e0dc34-e907-4658-8f7d-5c2260872455
 # ╟─1a831d36-e979-4368-ab1c-e13d94ff1d07
 # ╠═b56af094-17e9-459f-915f-295d36dceffd
+# ╟─7fc05850-2ddc-4ebb-954a-7e2d6d3aeadf
 # ╟─a6b61ca4-dcc0-4e3d-a8cb-9b2775d8b7b5
+# ╟─d9156571-08c3-4855-9d6c-2331bd829f56
+# ╟─9b7b7eb1-02af-446d-8c01-c931ee1b05e6
+# ╟─c5c7c3b0-4809-41d7-b94d-2bedd1febbcc
+# ╟─824d488e-ad43-4473-8f51-7a6a9863d3b3
+# ╟─39fe02d6-f461-4075-aa44-c684f870d635
