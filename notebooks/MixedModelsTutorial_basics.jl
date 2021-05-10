@@ -41,7 +41,11 @@ The script is structured in three main sections:
 """
 
 # ╔═╡ faafd359-fb38-4f49-9dfd-19cb4f0c5a54
-ViewDf = (x) -> DataFrame(Arrow.Table(take!(Arrow.write(IOBuffer(), x)))) # DB
+begin
+	function viewdf(x)
+		DataFrame(Arrow.Table(take!(Arrow.write(IOBuffer(), x))))
+	end
+end
 
 # ╔═╡ ee85abd9-0172-44d3-b03a-c6a780d33c72
 md"""
@@ -88,7 +92,7 @@ md"""
 dat_a1 = describe(dat)
 
 # ╔═╡ 16c3cdaa-49fa-46d5-a844-03094329fe4c
-ViewDf(dat)
+viewdf(dat)
 
 # ╔═╡ bbb8b977-29a6-4b0c-b71d-6d37bf22ce19
 # ... by Test
@@ -97,7 +101,7 @@ begin
                              :score => length, :age => mean,
                              :score => mean, :score  => std, 
                              :zScore => mean, :zScore => std)
-	ViewDf(dat_a2)
+	viewdf(dat_a2)
 end
 
 # ╔═╡ 64cc1f8e-f831-4a53-976f-dc7600b5634d
@@ -107,7 +111,7 @@ begin
                              :score => length, :age => mean,
                              :score => mean, :score  => std, 
                              :zScore => mean, :zScore => std)
-	ViewDf(dat_a3)
+	viewdf(dat_a3)
 end
 
 # ╔═╡ 57693079-d489-4e8c-a745-338ccde7eab1
@@ -431,16 +435,24 @@ md"""The decision about model selection will depend on where on the dimension wi
 md"""
 #### 2.6 Fitting the published LMM `m1` to the reduced data
 
-The LMM `m1` reported in Fühner et al. (2021) included random factors for `School`, `Child`, and `Cohort`.  The RES for `School` was specified like in LMM `m_cpx`. 
+The LMM `m1` reported in Fühner et al. (2021) included random factors for `School`,
+`Child`, and `Cohort`. The RES for `School` was specified like in LMM `m_cpx`. The
+RES for `Child` included VCs an d CPs for `Test`, but not for linear developmental
+gain in the ninth year of life `a1` or `Sex`; they are between-`Child` effects. 
 
-The RES for `Child` included VCs an d CPs for `Test`, but not for linear developmental gain in the ninth year of life `a1` or `Sex`; they are between-`Child` effects. 
+The RES for `Cohort` included only VCs, no CPs for `Test`. The _parsimony_ was due
+to the small number of nine levels for this grouping factor. We will check online
+whether a more complex LMM would be supported by the data. 
 
-The RES for `Cohort` included only VCs, no CPs for `Test`. The _parsimony_ was due to the small number of nine levels for this grouping factor. We will check online whether a more complex LMM would be supported by the data. 
+Here we fit this LMM `m1` for the reduced data. On a MacBook Pro [13 | 15 | 16] this
+takes [303 | 250 | 244 ] s; for LMM `m1a` (i.e., dropping 1 school-relate VC for
+`Sex`), times are  [212 | 165 | 160] s. The corresponding `lme4` times for LMM `m1`
+are [397  | 348 | 195]. 
 
-Here we fit this LMM `m1` for the reduced data. On a MacBook Pro [13 | 15 | 16] this takes [xxx | 250 | 195] s; for LMM `m1a` (i.e., dropping 1 school-relate VC for `Sex`), times are  [xxx | xxx | 165] s. Finally, times for fitting the full set of data for LMM `m1` are [xxx | xxxx | xxxx] s.
-
-The corresponding `lme4` times for LMM `m1a` are [xxx | xxxx | xxxx]. It was not possible to fit the full set of data with this package within a reasonable amount of time. (RK: Actually, I have not run these models yet; these sentences are expectations at this point -- based on past experiences.]
-
+Finally, times for fitting the full set of data --not in this script--, for LMM `m1`are 
+[60 | 62 | 85] minutes (!); for LMM `m1a` the times were [46 | 48 | 34] minutes. It was 
+not possible to fit the full set of data with `lme4`; after about 13 to 18 minutes the 
+program stopped with:  `Error in eval_f(x, ...) : Downdated VtV is not positive definite.`
 """
 
 
