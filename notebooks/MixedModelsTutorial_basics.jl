@@ -13,7 +13,7 @@ end
 
 # ╔═╡ 880ea5ac-a851-446e-8da9-d5f9f161a932
 begin
-	using CSV, RCall, DataFrames, MixedModels, StatsBase
+	using CSV, RCall, DataFrames, MixedModels, Statistics, StatsBase
 	using CategoricalArrays, Arrow
 	using AlgebraOfGraphics
 	using AlgebraOfGraphics: linear
