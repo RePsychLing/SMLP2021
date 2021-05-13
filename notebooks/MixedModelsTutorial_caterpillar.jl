@@ -25,15 +25,18 @@ end
 md"""
 # Mixed Models Tutorial: Conditional Modes
 
-Ths script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). 
+This script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). 
 Physical fitness in third grade of primary school: 
 A mixed model analysis of 108,295 children and 515 schools.
 
-To circumvent delays associated with model fitting we work with a reduced data set and less complex models than those in the reference publication. All the data to reproduce the models in the publication are used here, too; the script requires only a few changes to specify the more complex models in the paper. 
+All children were between 6.0 and 6.99 years at legal keydate (30 September) of school enrollement, 
+that is in their ninth year of life in the third grade. To avoid delays associated with model 
+fitting we work with a reduced data set and less complex models than those in the reference 
+publication. The script requires only a few changes to specify the more complex models in the paper. 
 
 The script is structured in three main sections: 
 
-1. **Setup** with reading and examing the data, plotting the main results, and specifying the contrasts for the fixed factor `Test`.
+1. **Setup** with reading and examing the data
 2. **Extraction of conditional modes** 
 3. **Caterpillar plot**
 
@@ -54,8 +57,8 @@ md"""
 
 1. Cohort: 9 levels; 2011-2019
 2. School: 46 levels 
-3. Child: 11566 levels; all children were between 6.0 and 6.99 years at legal keydate (30 September) of school enrollement.
-4. Sex: 5893 girls, 5673 boys
+3. Child: 11,566 levels
+4. Sex: 5,893 girls, 5,673 boys
 5. age: test date - middle of month of birthdate (ranges between 7.9 and 9.2)
 6. Test: 5 levels
      + Endurance (`Run`):  6 minute endurance run [m]; to nearest 9m in 9x18m field
