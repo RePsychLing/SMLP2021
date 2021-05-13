@@ -13,7 +13,7 @@ end
 
 # ╔═╡ 880ea5ac-a851-446e-8da9-d5f9f161a932
 begin
-	using CSV, RCall, DataFrames, MixedModels, Statistics, StatsBase
+	using CSV, RCall, DataFrames, MixedModels, StatsBase
 	using CategoricalArrays, Arrow
 	using AlgebraOfGraphics
 	using AlgebraOfGraphics: linear
@@ -49,7 +49,7 @@ end
 
 # ╔═╡ ee85abd9-0172-44d3-b03a-c6a780d33c72
 md"""
-### 1.1 Readme for 'fggk21.rds'
+### 1.1 Readme for 'EmotikonSubset.rds'
 
 1. Cohort: 9 levels; 2011-2019
 2. School: 46 levels 
