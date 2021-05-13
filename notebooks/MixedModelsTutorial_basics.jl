@@ -649,8 +649,8 @@ df2 = groupby(   # summary grouped data frame by test, sex, rounded age
 		groupby(
 			select(dat,
 				:age => (x -> round.(x, digits=1)) => :Age,
+				:Sex,
 				:Test => (t -> getindex.(Ref(Dict(tlabels)), t)) => :Test,
-				:Sex => (s -> ifelse.(s .== "female", "Girls", "Boys")) => :Sex,
 				:zScore,
 			),
 			[:Age, :Sex, :Test]),
@@ -659,6 +659,13 @@ df2 = groupby(   # summary grouped data frame by test, sex, rounded age
 	:Test,
 )
 
+# ╔═╡ 9e13dae8-32da-4c2c-bf6b-d9565b253bb1
+md"""
+**To Do**
++ Reverse legend entries
++ Add regression lines for both zero-order and partial effects
+"""
+
 # ╔═╡ 1f6446cc-8b40-4cec-880c-3318f78a56f8
 begin
 				# create the figure and panels (axes) within the figure
@@ -666,10 +673,10 @@ begin
 	faxs =  [Axis(fTest[1, i]) for i in eachindex(tlabels)]
 				# iterate over the test labels in the desired order
 	for (i, lab) in enumerate(last.(tlabels))
-					# create the label in a box at the top
+			    # create the label in a box at the top
 		Box(fTest[1, i, Top()], backgroundcolor = :gray)
     	Label(fTest[1, i, Top()], lab, padding = (5, 5, 5, 5))
-					# split the subdataframe by sex to plot the points
+				# split the subdataframe by sex to plot the points
 		for df in groupby(df2[(Test = lab,)], :Sex)
 			scatter!(
 				faxs[i],
@@ -792,4 +799,5 @@ end
 # ╠═10963e51-7edc-4aa2-9535-dfdf81586b76
 # ╠═aaeaeca7-438b-441f-83ce-be8de76a4d02
 # ╠═af370caf-a44e-45d2-a547-231dfc00697c
+# ╟─9e13dae8-32da-4c2c-bf6b-d9565b253bb1
 # ╠═1f6446cc-8b40-4cec-880c-3318f78a56f8
