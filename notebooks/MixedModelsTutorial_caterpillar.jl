@@ -13,7 +13,7 @@ end
 
 # ╔═╡ 4ecf1267-aac9-4e8f-a522-5595b1205f43
 begin
-	using CSV, RCall, DataFrames, MixedModels
+	using CSV, RCall, DataFrames, MixedModels, MixedModelsMakie
 	using LinearAlgebra, Statistics, StatsBase
 	using CategoricalArrays, Arrow
 	using AlgebraOfGraphics
@@ -23,7 +23,7 @@ end
 
 # ╔═╡ eebef932-1d63-41e5-998f-9748379c43af
 md"""
-# Mixed Models Tutorial: Conditional Modes
+# Mixed Models Tutorial: Conditional Modes and Caterpillar Plots
 
 This script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). 
 Physical fitness in third grade of primary school: 
@@ -34,11 +34,12 @@ that is in their ninth year of life in the third grade. To avoid delays associat
 fitting we work with a reduced data set and less complex models than those in the reference 
 publication. The script requires only a few changes to specify the more complex models in the paper. 
 
-The script is structured in three main sections: 
+The script is structured in three main sections and an Appendix: 
 
 1. **Setup** with reading and examing the data
 2. **Extraction of conditional modes** 
 3. **Caterpillar plot**
+4. **Appendix:** Soruce of MixedModelsMakie `caterpillar()` function
 
 ## 1. Setup
 ### 1.0 Packages and functions
@@ -128,66 +129,160 @@ end;
 
 # ╔═╡ e3cf1ee6-b64d-4356-af23-1dd5c7a0fec6
 md"""
-#### 2.2 LMMs  `m11` for the reduced data
+#### 2.2 LMMs  `m11` and `m12` for the reduced data
 
-We fit LMM `m11_Cohort` (only nine levels, six VCs for Test; no CPs) and `m11_School` (46 levels; VCs and CPs for test and linear effect of age)
+LMM `m11` corresponds to LMM `m1` in the publication, but fit to the reduced set of data. Conditional (co-)variances cannot not (yet) be computed with `Child` in the LMM. Therefore, we estimate also LMM `m12` without the random factor `Child`. For the final LMM we also estimate conditional covariances for scores, rather than effects.
+
 """
 
-
-
 # ╔═╡ 0dd0d060-81b4-4cc0-b306-dda7589adbd2
-f11_Cohort =  @formula zScore ~ 1 + Test * a1 * Sex +  zerocorr(1 + Test | Cohort)
+begin
+    f11 = @formula zScore ~ 1 + Test * a1 * Sex +  
+                           (1 + Test + a1 | School) + (1 + Test | Child) +
+                   zerocorr(1 + Test | Cohort);
+    m11 = fit(MixedModel, f11, dat)
+    VarCorr(m11)
+end
 
 # ╔═╡ f68f6884-7c37-4868-b0b7-01ad450ee383
-m11_Cohort = fit(MixedModel, f11_Cohort, dat)
+begin
+    f12 = @formula zScore ~ 1 + Test * a1 * Sex +  
+                           (1 + Test + a1 | School) + 
+                   zerocorr(1 + Test | Cohort);
+    m12 = fit(MixedModel, f12, dat)
+    VarCorr(m12)
+end
+
+# ╔═╡ a1186b62-81fd-4f99-ba59-45c213ec264b
+begin
+    f13 = @formula zScore ~ 1 + Test * a1 * Sex +  
+                           (0 + Test + a1 | School) + 
+                   zerocorr(0 + Test | Cohort);
+    m13 = fit(MixedModel, f13, dat)
+    VarCorr(m13)
+end
 
 # ╔═╡ ef1dfbf4-700c-4093-9824-01368c511531
-VarCorr(m11_Cohort)
+md"""
+### 2.2 Conditional modes (BLUPs)
+#### Three random factors
+"""
 
 # ╔═╡ ace9a2f8-075a-49b5-94eb-12be4ffb6568
-f11_School =  @formula zScore ~ 1 + Test * a1 * Sex +  (1 + Test + a1 | School)
+begin
+ cms11 = raneftables(m11);   # pooled array?
+ cms11_Schl = DataFrame(cms11.School);
+ cms11_Chld = DataFrame(cms11.Child);
+ cms11_Chrt = DataFrame(cms11.Cohort)
+end
 
 # ╔═╡ 167fbd71-2a7b-4afa-8ffb-815dcda63129
-m11_School = fit(MixedModel, f11_School, dat)
+md"""
+#### Two random factors -- w/o Child
+
+First LMM m12 with effects; the LMM m13 with scores.
+"""
 
 # ╔═╡ 68ee8abb-04e6-45ee-8f0a-033e7d2ef57b
-VarCorr(m11_School)
+begin
+  cms12 = raneftables(m12);   # pooled array?
+  cms12_Schl = DataFrame(cms12.School);
+  cms12_Chrt = DataFrame(cms12.Cohort);
+end
+
+# ╔═╡ 3a3c50c6-7372-49f9-94c9-36b4d71d5ff6
+begin
+  cms13 = raneftables(m13);   # pooled array?
+  cms13_Schl = DataFrame(cms13.School);
+  cms13_Chrt = DataFrame(cms13.Cohort);
+end
 
 # ╔═╡ dd8b5c05-c1c8-4778-b179-1ad39f50f8d3
-f12 = @formula zScore ~ 1 + Test * a1 * Sex +  
-                       (1 + Test + a1 | School) + zerocorr(1 + Test | Cohort)
+md"""
+### 2.3 Conditional (co-)variances
+### Three random factors
+"""
 
 # ╔═╡ 25376bb3-4673-4c89-8600-6e3da85971b4
-m12 = fit(MixedModel, f12, dat)
+BlockDescription(m11)
 
 # ╔═╡ e7cdd374-57c3-4d3c-9b1b-b6a211733b81
-VarCorr(m12)
-
-# ╔═╡ 5ffbc2ca-02df-4dd7-8e3b-f692d7d12adb
-
+cvs11 = condVar(m11) 
 
 # ╔═╡ 1a2586a6-ff9d-4067-a5af-6c0ee6929e81
 md"""
-### 2.2 Conditional modes
+### Two random factors - w/o Child
+First LMM m12 with effects; then LMM m13 with scores.
 """
 
 # ╔═╡ d2c0979e-ed52-4b56-b3ec-58db1609843e
-cms = raneftables(m11_School)
-
-# ╔═╡ 776cec2c-c566-4f40-81f5-12546c6a4da7
-cms_Chrt = DataFrame(cms.School);
+begin
+    BlockDescription(m12)
+    cvs12 = condVar(m12);    # 2-element Vector{Array{Float64, 3}}
+	cvs12_Schl = cvs12[1] 
+end
 
 # ╔═╡ cf3f5312-6702-4069-95aa-862dc54d9a34
-cvs = condVar(m11_School)
+cvs12_Chrt = cvs12[2]    # 5×5×9 Array{Float64, 3}:
+
+# ╔═╡ 4c5f8c2a-85b0-45a6-925d-1deaa1f302d2
+md"""
+We can also look at scores rather than effects.
+"""
+
+# ╔═╡ 17d31da0-9579-4d8f-9b7f-2cd987200d2e
+begin
+    BlockDescription(m13)
+    cvs13 = condVar(m13);    # 2-element Vector{Array{Float64, 3}}
+	cvs13_Schl = cvs13[1] 
+end
+
+# ╔═╡ 90ffbb02-139c-4a28-ac76-47e414974840
+cvs13_Chrt = cvs13[2] 
+
+
+# ╔═╡ 5a62529e-cc10-4e2c-8d75-125951f2dc34
+md"""
+## 3 Caterpillar plots
+
+A "caterpillar plot" is a horizontal error-bar plot of conditional modes and credibility intervals.
+
+    caterpillar(m::LinearMixedModel, gf::Symbol)
+
+In the case f LMMs, conditonal modes are the conditional means.
+"""
+
+# ╔═╡ d9459ffb-f9db-4a4e-9e25-5b34df6540c5
+md"""
+### 3.1 LMM `m12_Cohort`
+#### **Effects**
+"""
+
+# ╔═╡ 58651ebc-2c69-4814-af5e-87fd5d7c3b52
+md"""#### Scores"""
+
+# ╔═╡ 53ed436c-82b9-4331-bef4-0e034c233e7f
+md"""
+### 3.2 LMM `m12_School`
+#### Effects
+"""
+
+# ╔═╡ 61cd093e-aa4e-475a-9d62-3ddd3e2b5fd7
+md"""
+#### Scores
+"""
 
 # ╔═╡ 10ef55d6-6048-4353-92e5-e4621bfb130e
 md"""
-### 3 MixedModelsMakie functions
+## 4 APPENDIX: Source of MixedModelsMakie caterpillar function
 
-Information on random effects conditional modes/means, variances, etc.
+These functions are **disabled** at the start of the notebook. The `caterpillar` function is available from the package `MixedModelsMakie`.  It generates and uses information on random effects conditional modes/means, variances, etc.
+
 """
 
 # ╔═╡ cbe2197e-12c7-4d55-8817-d25d7b7cc5bd
+md"""
+
 struct RanefInfo{T<:AbstractFloat}
     cnames::Vector{String}
     levels::Vector
@@ -195,10 +290,12 @@ struct RanefInfo{T<:AbstractFloat}
     stddev::Matrix{T}
 end
 
+"""
+
 # ╔═╡ 32acfdf0-ecb6-4acb-904f-d7b963771d6d
 md"""
 
-ranefinfo(m::LinearMixedModel)
+`ranefinfo(m::LinearMixedModel)`
 
 Return a `NamedTuple{fnames(m), NTuple(k, RanefInfo)}` from model `m`
 """
@@ -221,7 +318,19 @@ function ranefinfo(m::LinearMixedModel{T}) where {T}
     NamedTuple{fn}((val...,))
 end
 
-# ╔═╡ cd4d8409-cb5e-4f38-bd63-c54b8f09e5ff
+# ╔═╡ ffcc35da-25b8-4bee-80d2-93b033584cd4
+md"""
+  
+`caterpillar!(f::Figure, r::RanefInfo; orderby=1)`
+
+Add Axes of a caterpillar plot from `r` to `f`.
+
+The order of the levels on the vertical axes is increasing `orderby` column
+of `r.ranef`, usually the `(Intercept)` random effects.
+"""
+
+
+# ╔═╡ d1efb45b-44e4-4a6c-a967-0dc054a5ae83
 function caterpillar!(f::Figure, r::RanefInfo; orderby=1)
     rr = r.ranef
     vv = view(rr, :, orderby)
@@ -242,60 +351,31 @@ function caterpillar!(f::Figure, r::RanefInfo; orderby=1)
     f
 end
 
-# ╔═╡ bd10bfa8-9e22-4927-b83e-eb80f328c6a3
+
+# ╔═╡ 781486fc-79b4-4e2e-9902-c29c3e4460b6
 md"""
     caterpillar(m::LinearMixedModel, gf::Symbol)
-
 Returns a `Figure` of a "caterpillar plot" of the random-effects means and prediction intervals
-
 A "caterpillar plot" is a horizontal error-bar plot of conditional means and standard deviations
 of the random effects.
 """
 
-
-# ╔═╡ 727059df-d7a5-4714-8dcb-6568d9119510
+# ╔═╡ 28e8dc7f-7841-4651-9119-de785086124a
 function caterpillar(m::LinearMixedModel, gf::Symbol=first(fnames(m)))
     caterpillar!(Figure(resolution=(1000,800)), ranefinfo(m)[gf])
 end
 
-# ╔═╡ 5a62529e-cc10-4e2c-8d75-125951f2dc34
-md"""
-  caterpillar!(f::Figure, r::RanefInfo; orderby=1)
+# ╔═╡ 9a0194cd-3f96-4014-b146-a7842a4fa22f
+caterpillar(m12, last(fnames(m12)))
 
-Add Axes of a caterpillar plot from `r` to `f`.
+# ╔═╡ 407dcab5-40e4-4b53-a5ce-b771c76b8497
+caterpillar(m13, :Cohort)
 
-The order of the levels on the vertical axes is increasing `orderby` column
-of `r.ranef`, usually the `(Intercept)` random effects.
-"""
+# ╔═╡ 26465af0-c83b-4e1c-9a8d-800a8140e5c0
+caterpillar(m12, :School)
 
-# ╔═╡ a9043efa-17e5-498f-a744-7c0690446263
-md"""
-## 4. Caterpillar plots
-### 4.1 LMM `m11_Cohort`
-"""
-  
-
-# ╔═╡ 07a00ce2-4658-49ff-a384-4b5230691a7b
-caterpillar(m11_Cohort)
-
-# ╔═╡ 53ed436c-82b9-4331-bef4-0e034c233e7f
-md"""
-### 4.2 LMM `m11_School`
-"""
-
-# ╔═╡ 44b78423-e28c-4787-921e-e4ba4173a31c
-caterpillar(m11_School)
-
-# ╔═╡ 8e15a0b8-b445-4bec-8016-7b6eacf3c889
-md"""
-### 4.3 LMM `m12`
-"""
-
-# ╔═╡ 90dc96b9-3cc6-47d3-84d0-6c3eb8a05a5d
-last(fnames(m12))
-
-# ╔═╡ 12518738-2269-4019-9572-bfe6c9dc224f
-caterpillar(m12)
+# ╔═╡ 205b7fdb-2db6-4c81-a75b-b0729f57735e
+caterpillar(m13, :School)
 
 # ╔═╡ Cell order:
 # ╠═9396fcac-b0b6-11eb-3a60-9f2ce25df953
@@ -310,33 +390,38 @@ caterpillar(m12)
 # ╠═64cc1f8e-f831-4a53-976f-dc7600b5634d
 # ╟─c6c6f056-b8b9-4190-ac14-b900bafa04df
 # ╠═c5326753-a03b-4739-a82e-90ffa7c1ebdb
-# ╟─e3cf1ee6-b64d-4356-af23-1dd5c7a0fec6
+# ╠═e3cf1ee6-b64d-4356-af23-1dd5c7a0fec6
 # ╠═0dd0d060-81b4-4cc0-b306-dda7589adbd2
 # ╠═f68f6884-7c37-4868-b0b7-01ad450ee383
+# ╠═a1186b62-81fd-4f99-ba59-45c213ec264b
 # ╠═ef1dfbf4-700c-4093-9824-01368c511531
 # ╠═ace9a2f8-075a-49b5-94eb-12be4ffb6568
 # ╠═167fbd71-2a7b-4afa-8ffb-815dcda63129
 # ╠═68ee8abb-04e6-45ee-8f0a-033e7d2ef57b
+# ╠═3a3c50c6-7372-49f9-94c9-36b4d71d5ff6
 # ╠═dd8b5c05-c1c8-4778-b179-1ad39f50f8d3
 # ╠═25376bb3-4673-4c89-8600-6e3da85971b4
 # ╠═e7cdd374-57c3-4d3c-9b1b-b6a211733b81
-# ╠═5ffbc2ca-02df-4dd7-8e3b-f692d7d12adb
-# ╠═1a2586a6-ff9d-4067-a5af-6c0ee6929e81
+# ╟─1a2586a6-ff9d-4067-a5af-6c0ee6929e81
 # ╠═d2c0979e-ed52-4b56-b3ec-58db1609843e
-# ╠═776cec2c-c566-4f40-81f5-12546c6a4da7
 # ╠═cf3f5312-6702-4069-95aa-862dc54d9a34
+# ╠═4c5f8c2a-85b0-45a6-925d-1deaa1f302d2
+# ╠═17d31da0-9579-4d8f-9b7f-2cd987200d2e
+# ╠═90ffbb02-139c-4a28-ac76-47e414974840
+# ╟─5a62529e-cc10-4e2c-8d75-125951f2dc34
+# ╟─d9459ffb-f9db-4a4e-9e25-5b34df6540c5
+# ╠═9a0194cd-3f96-4014-b146-a7842a4fa22f
+# ╟─58651ebc-2c69-4814-af5e-87fd5d7c3b52
+# ╠═407dcab5-40e4-4b53-a5ce-b771c76b8497
+# ╟─53ed436c-82b9-4331-bef4-0e034c233e7f
+# ╠═26465af0-c83b-4e1c-9a8d-800a8140e5c0
+# ╟─61cd093e-aa4e-475a-9d62-3ddd3e2b5fd7
+# ╠═205b7fdb-2db6-4c81-a75b-b0729f57735e
 # ╟─10ef55d6-6048-4353-92e5-e4621bfb130e
 # ╠═cbe2197e-12c7-4d55-8817-d25d7b7cc5bd
 # ╟─32acfdf0-ecb6-4acb-904f-d7b963771d6d
 # ╠═90ce17cc-d497-4605-aa62-be69343e03eb
-# ╠═cd4d8409-cb5e-4f38-bd63-c54b8f09e5ff
-# ╟─bd10bfa8-9e22-4927-b83e-eb80f328c6a3
-# ╠═727059df-d7a5-4714-8dcb-6568d9119510
-# ╟─5a62529e-cc10-4e2c-8d75-125951f2dc34
-# ╟─a9043efa-17e5-498f-a744-7c0690446263
-# ╠═07a00ce2-4658-49ff-a384-4b5230691a7b
-# ╟─53ed436c-82b9-4331-bef4-0e034c233e7f
-# ╠═44b78423-e28c-4787-921e-e4ba4173a31c
-# ╟─8e15a0b8-b445-4bec-8016-7b6eacf3c889
-# ╠═90dc96b9-3cc6-47d3-84d0-6c3eb8a05a5d
-# ╠═12518738-2269-4019-9572-bfe6c9dc224f
+# ╟─ffcc35da-25b8-4bee-80d2-93b033584cd4
+# ╠═d1efb45b-44e4-4a6c-a967-0dc054a5ae83
+# ╠═781486fc-79b4-4e2e-9902-c29c3e4460b6
+# ╠═28e8dc7f-7841-4651-9119-de785086124a
