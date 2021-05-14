@@ -273,7 +273,8 @@ contr3 = merge(
 	         							    -1 +1  0  0  0
 	           								 0 -1 +1  0  0
 	           								 0  0 -1 +1  0],
-		                  levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])));
+		                  levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"],
+			      labels=["BPT-other", "Star-End", "S20-Star", "SLJ-S20"])));
 
 # ╔═╡ 61f7ddca-27d0-4f4f-bac9-d757d19faa39
 m_ovi_Hypo = fit(MixedModel, f_ovi, dat, contrasts=contr3)
@@ -307,7 +308,8 @@ contr4 = merge(
 	         							    -3 +2 +2 +2 -3
 	           								 0 +2 -1 -1  0
 	           								 0  0 +1 -1  0],
-		                  levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])));
+		                  levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"],
+			              labels=["c5.1", "c234.15", "c2.34", "c3.4"])));
 
 # ╔═╡ 6c51fa65-ea7d-46b5-b25b-8af43da4c1e8
 m_ovi_PCA = fit(MixedModel, f_ovi, dat, contrasts=contr4)

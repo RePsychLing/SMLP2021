@@ -180,7 +180,7 @@ end
 md"""
 #### Two random factors -- w/o Child
 
-First LMM m12 with effects; the LMM m13 with scores.
+First LMM m12 with effects; the second LMM m13 with scores.
 """
 
 # ╔═╡ 68ee8abb-04e6-45ee-8f0a-033e7d2ef57b
@@ -352,6 +352,30 @@ function caterpillar!(f::Figure, r::RanefInfo; orderby=1)
 end
 
 
+# ╔═╡ 9a0194cd-3f96-4014-b146-a7842a4fa22f
+begin
+	re12_Chrt = ranefinfo(m12)[:Cohort];
+	caterpillar!(Figure(; resolution=(800,600)), re12_Chrt; orderby=1)
+end
+
+# ╔═╡ 407dcab5-40e4-4b53-a5ce-b771c76b8497
+begin
+	re13_Chrt = ranefinfo(m13)[:Cohort];
+	caterpillar!(Figure(; resolution=(800,600)), re13_Chrt; orderby=2)
+end
+
+# ╔═╡ 26465af0-c83b-4e1c-9a8d-800a8140e5c0
+begin
+	re12_Schl = ranefinfo(m12)[:School];
+	caterpillar!(Figure(; resolution=(800,600)), re12_Schl; orderby=3)
+end
+
+# ╔═╡ 205b7fdb-2db6-4c81-a75b-b0729f57735e
+begin
+	re13_Schl = ranefinfo(m13)[:School];
+	caterpillar!(Figure(; resolution=(800,600)), re13_Schl; orderby=6)
+end
+
 # ╔═╡ 781486fc-79b4-4e2e-9902-c29c3e4460b6
 md"""
     caterpillar(m::LinearMixedModel, gf::Symbol)
@@ -364,18 +388,6 @@ of the random effects.
 function caterpillar(m::LinearMixedModel, gf::Symbol=first(fnames(m)))
     caterpillar!(Figure(resolution=(1000,800)), ranefinfo(m)[gf])
 end
-
-# ╔═╡ 9a0194cd-3f96-4014-b146-a7842a4fa22f
-caterpillar(m12, last(fnames(m12)))
-
-# ╔═╡ 407dcab5-40e4-4b53-a5ce-b771c76b8497
-caterpillar(m13, :Cohort)
-
-# ╔═╡ 26465af0-c83b-4e1c-9a8d-800a8140e5c0
-caterpillar(m12, :School)
-
-# ╔═╡ 205b7fdb-2db6-4c81-a75b-b0729f57735e
-caterpillar(m13, :School)
 
 # ╔═╡ Cell order:
 # ╠═9396fcac-b0b6-11eb-3a60-9f2ce25df953
@@ -390,13 +402,13 @@ caterpillar(m13, :School)
 # ╠═64cc1f8e-f831-4a53-976f-dc7600b5634d
 # ╟─c6c6f056-b8b9-4190-ac14-b900bafa04df
 # ╠═c5326753-a03b-4739-a82e-90ffa7c1ebdb
-# ╠═e3cf1ee6-b64d-4356-af23-1dd5c7a0fec6
+# ╟─e3cf1ee6-b64d-4356-af23-1dd5c7a0fec6
 # ╠═0dd0d060-81b4-4cc0-b306-dda7589adbd2
 # ╠═f68f6884-7c37-4868-b0b7-01ad450ee383
 # ╠═a1186b62-81fd-4f99-ba59-45c213ec264b
-# ╠═ef1dfbf4-700c-4093-9824-01368c511531
+# ╟─ef1dfbf4-700c-4093-9824-01368c511531
 # ╠═ace9a2f8-075a-49b5-94eb-12be4ffb6568
-# ╠═167fbd71-2a7b-4afa-8ffb-815dcda63129
+# ╟─167fbd71-2a7b-4afa-8ffb-815dcda63129
 # ╠═68ee8abb-04e6-45ee-8f0a-033e7d2ef57b
 # ╠═3a3c50c6-7372-49f9-94c9-36b4d71d5ff6
 # ╠═dd8b5c05-c1c8-4778-b179-1ad39f50f8d3
