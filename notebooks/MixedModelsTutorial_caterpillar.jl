@@ -170,7 +170,7 @@ md"""
 
 # ╔═╡ ace9a2f8-075a-49b5-94eb-12be4ffb6568
 begin
- cms11 = raneftables(m11);   # pooled array?
+ cms11 = raneftables(m11);   
  cms11_Schl = DataFrame(cms11.School);
  cms11_Chld = DataFrame(cms11.Child);
  cms11_Chrt = DataFrame(cms11.Cohort)
@@ -185,14 +185,14 @@ First LMM m12 with effects; the second LMM m13 with scores.
 
 # ╔═╡ 68ee8abb-04e6-45ee-8f0a-033e7d2ef57b
 begin
-  cms12 = raneftables(m12);   # pooled array?
+  cms12 = raneftables(m12);   
   cms12_Schl = DataFrame(cms12.School);
   cms12_Chrt = DataFrame(cms12.Cohort);
 end
 
 # ╔═╡ 3a3c50c6-7372-49f9-94c9-36b4d71d5ff6
 begin
-  cms13 = raneftables(m13);   # pooled array?
+  cms13 = raneftables(m13);   
   cms13_Schl = DataFrame(cms13.School);
   cms13_Chrt = DataFrame(cms13.Cohort);
 end
@@ -252,9 +252,15 @@ A "caterpillar plot" is a horizontal error-bar plot of conditional modes and cre
 In the case f LMMs, conditonal modes are the conditional means.
 """
 
+# ╔═╡ cb6195ea-296d-4cd2-9be0-906ebf42d5a3
+md"""
+### 3.1 LMM `m11_Cohort`
+#### **Effects**
+"""
+
 # ╔═╡ d9459ffb-f9db-4a4e-9e25-5b34df6540c5
 md"""
-### 3.1 LMM `m12_Cohort`
+### 3.2 LMM `m12_Cohort`
 #### **Effects**
 """
 
@@ -263,7 +269,7 @@ md"""#### Scores"""
 
 # ╔═╡ 53ed436c-82b9-4331-bef4-0e034c233e7f
 md"""
-### 3.2 LMM `m12_School`
+### 3.3 LMM `m12_School`
 #### Effects
 """
 
@@ -352,6 +358,12 @@ function caterpillar!(f::Figure, r::RanefInfo; orderby=1)
 end
 
 
+# ╔═╡ 64e3f006-9120-40a5-97da-8d6694a7cc87
+begin
+	re11_Chrt = ranefinfo(m11)[:Cohort];
+	caterpillar!(Figure(; resolution=(800,600)), re11_Chrt; orderby=1)
+end
+
 # ╔═╡ 9a0194cd-3f96-4014-b146-a7842a4fa22f
 begin
 	re12_Chrt = ranefinfo(m12)[:Cohort];
@@ -421,11 +433,13 @@ end
 # ╠═17d31da0-9579-4d8f-9b7f-2cd987200d2e
 # ╠═90ffbb02-139c-4a28-ac76-47e414974840
 # ╟─5a62529e-cc10-4e2c-8d75-125951f2dc34
-# ╟─d9459ffb-f9db-4a4e-9e25-5b34df6540c5
+# ╠═cb6195ea-296d-4cd2-9be0-906ebf42d5a3
+# ╠═64e3f006-9120-40a5-97da-8d6694a7cc87
+# ╠═d9459ffb-f9db-4a4e-9e25-5b34df6540c5
 # ╠═9a0194cd-3f96-4014-b146-a7842a4fa22f
 # ╟─58651ebc-2c69-4814-af5e-87fd5d7c3b52
 # ╠═407dcab5-40e4-4b53-a5ce-b771c76b8497
-# ╟─53ed436c-82b9-4331-bef4-0e034c233e7f
+# ╠═53ed436c-82b9-4331-bef4-0e034c233e7f
 # ╠═26465af0-c83b-4e1c-9a8d-800a8140e5c0
 # ╟─61cd093e-aa4e-475a-9d62-3ddd3e2b5fd7
 # ╠═205b7fdb-2db6-4c81-a75b-b0729f57735e
