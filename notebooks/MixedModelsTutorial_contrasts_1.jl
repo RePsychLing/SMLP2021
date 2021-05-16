@@ -138,10 +138,10 @@ Finally, contrasts for the five levels of the fixed factor `Test` represent the 
 
 _SeqDiffCoding_ was used in the publication. This specification tests pairwise differences between the five neighboring levels of `Test`, that is: 
 
-+ SDH1: 2-1
-+ SDH2: 3-2
-+ SDH3: 4-3
-+ SDH4: 5-4
++ SDC1: 2-1
++ SDC2: 3-2
++ SDC3: 4-3
++ SDC4: 5-4
 
 The levels were sorted such that these contrasts map onto four  _a priori_ hypotheses; in other words, they are _theoretically_ motivated pairwise comparisons. The motivation also encompasses theoretically motivated interactions with `Sex`. The order of levels can also be explicitly specified during contrast construction. This is very useful if levels are in a different order in the dataframe. We recommend it in general to increase transparency of the code. 
 
@@ -219,10 +219,10 @@ md"""
 
 The second set of contrasts uses _HelmertCoding_. Helmert coding codes each level as the difference from the average of the lower levels. With the default order of `Test` levels this yields the following test statistics which we describe in reverse order of appearance in model output
 
-+ HeCH4: 5 - mean(1,2,3,4)
-+ HeCH3: 4 - mean(1,2,3)
-+ HeCH2: 3 - mean(1,2)
-+ HeCH1: 2 - 1
++ HeC4: 5 - mean(1,2,3,4)
++ HeC3: 4 - mean(1,2,3)
++ HeC2: 3 - mean(1,2)
++ HeC1: 2 - 1
 
 In the model output, HeCH1 will be reported first and HeCH4 last.
 
@@ -240,17 +240,23 @@ The statistical advantage of _HelmertCoding_ is that the resulting contrasts are
 
 # ╔═╡ 7dca92f9-dcc2-462c-b501-9ecabce74005
 contr2 = merge(
-		   Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"])),
-	       Dict(:Test => HelmertCoding(; levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"]))
-	   );
+     Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),  	 
+	 Dict(:Sex =>     EffectsCoding( levels=["Girls", "Boys"])),
+	 Dict(:Test => HelmertCoding(
+			       levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])));
 
 # ╔═╡ c8a80ac2-af56-4503-b05d-d727d7bcac12
 m_ovi_Helmert = fit(MixedModel, f_ovi, dat, contrasts=contr2)
 
 # ╔═╡ 9cfbcdf1-e78f-4e68-92b7-7761331d3972
 md"""
-We forego a detailed discussion of the effects, but note that again none of the interactions between `age x Sex` with the four test contrasts was significant.
+We forego a detailed discussion of the effects, but note that again none of the interactions between `age x Sex` with the four test contrasts was significant. 
+
+The default labeling of Helmert contrasts may lead to confusions with other contrasts. Therefore, we could provide our own labels:
+
+`labels=["c2.1", "c3.12", "c4.123", "c5.1234]"`
+
+Once the order of levels is memorized the solution offered here is quite transparent.  
 """
 
 # ╔═╡ a272171a-0cda-477b-9fb1-32b249e1a2c8
@@ -281,7 +287,7 @@ m_ovi_Hypo = fit(MixedModel, f_ovi, dat, contrasts=contr3)
 
 # ╔═╡ f36bfe9b-4c7d-4e43-ae0f-56a4a3865c9c
 md"""
-The labeling of the contrasts is suboptimal. There is an option to generate one's own labels by extracting the indicator variables from the model matrix and giving them meaningful names. 
+With HyppthesisCoding we must generate our own labels for the contrasts. The default labeling of contrasts is usually not interpretable and we provide our own. 
 
 Anyway, none of the interactions between `age` x `Sex` with the four `Test` contrasts was significant for these contrasts.
 """
@@ -292,12 +298,12 @@ md"""
 
 The fourth set of contrasts uses _HypothesisCoding_ to specify the set of contrasts implementing the loadings of the four principle components of the published LMM base on the test scores, not the test effects - coarse-grained, that is roughly according to their signs. This is actually a very interesting and plausible solution nobody proposed _a priori_. 
 
-+ PCA1: BPT - `Run_r` 
-+ PCA2: (`Star_r` + `S20_r` + `SLJ`) - (`BPT` + `Run_r`)
-+ PCA3:  `Star_r` - (`S20_r` + `SLJ`)
-+ PCA4:  `S20_r` - `SLJ`
++ PC1: `BPT` - `Run_r` 
++ PC2: (`Star_r` + `S20_r` + `SLJ`) - (`BPT` + `Run_r`)
++ PC3:  `Star_r` - (`S20_r` + `SLJ`)
++ PC4:  `S20_r` - `SLJ`
 
-PCA1 contrasts the worst and the best indicator of physical **health**; PCA2 contrasts these two against the core indicators of **physical fitness**; PCA3 tests within the core set the cognitive and the physical tests; and PCA4, finally, contrasts two types of lower muscular fitness, that is speed and power.
+PC1 contrasts the worst and the best indicator of physical **health**; PC2 contrasts these two against the core indicators of **physical fitness**; PC3 tests within the core set the cognitive and the physical tests; and PC4, finally, contrasts two types of lower muscular fitness, that is speed and power.
 """
 
 # ╔═╡ 42984738-dbb3-47a8-bb6e-3a721edef16d
@@ -312,11 +318,11 @@ contr4 = merge(
 			              labels=["c5.1", "c234.15", "c2.34", "c3.4"])));
 
 # ╔═╡ 6c51fa65-ea7d-46b5-b25b-8af43da4c1e8
-m_ovi_PCA = fit(MixedModel, f_ovi, dat, contrasts=contr4)
+m_ovi_PC = fit(MixedModel, f_ovi, dat, contrasts=contr4)
 
 # ╔═╡ 7eb0443f-eb43-4664-aeda-1bb254fdf241
 md"""
-Aside from the unfortunate labeling, there is actually an interaction with a z-value > 2.0 for the first PCA (i.e., `BPT` - `Run_r`).  This interaction would really need to be replicated to be taken seriously. It is probably be due to larger "unfitness" gains in boys that girls (i.e., in `BPT`)  relative to the slightly larger health-related "fitness" gains of girls than boys (i.e., in `Run_r`). 
+There is a numerical interaction with a z-value > 2.0 for the first PCA (i.e., `BPT` - `Run_r`).  This interaction would really need to be replicated to be taken seriously. It is probably be due to larger "unfitness" gains in boys that girls (i.e., in `BPT`)  relative to the slightly larger health-related "fitness" gains of girls than boys (i.e., in `Run_r`). 
 
 **We will look at the PCA solutions in some detail in a separate tutorial.**
 """
@@ -330,48 +336,105 @@ md"""
 The choice of contrast does not affect the model objective, in other words, they  all yield the same goodness of fit. It does not matter whether a contrast is orthogonal or not. 
 """
 
+# ╔═╡ 47faa5b7-bdc0-4673-a1e0-a0474bf28cce
+
+
 # ╔═╡ 6492eb08-239f-42cd-899e-9e227999d9e3
-[objective(m_ovi_SeqDiff), objective(m_ovi_Helmert), objective(m_ovi_Hypo)]
+[objective(m_ovi_SeqDiff), objective(m_ovi_Helmert), objective(m_ovi_Hypo), objective(m_ovi_PC)]
 
 
 # ╔═╡ 74d7a701-91cf-4dd1-9991-f94e156c3291
 md"""
 ### 3.2 VCs and CPs depend on contrast coding
 
-Trivially, the meaning of a contrast depends on its definition. Consequently, the contrast specification has a big effect on the random-effect structure. As an illustration, we refit the three LMMs with variance components (VCs) and correlation parameters (CPs) for `Child`-related contrasts of `Test`. 
+Trivially, the meaning of a contrast depends on its definition. Consequently, the contrast specification has a big effect on the random-effect structure. As an illustration, we refit the LMMs with variance components (VCs) and correlation parameters (CPs) for `Child`-related contrasts of `Test`. Unfortunately, it is not easy, actually rather quite difficult, to grasp the meaning of correlations of contrast-based effects; they represent two-way interactions.
 """
 
 # ╔═╡ 61e9e6c3-31f5-4037-b0f0-40b82d1d8fdc
 begin
-	f_Child = @formula zScore ~ 1 + Test*Sex*(age - 8.5) + (1 + Test | Child);
-	m_Child_SeqDiff = fit(MixedModel, f_Child, dat, contrasts=contr1);
-	m_Child_Helmert = fit(MixedModel, f_Child, dat, contrasts=contr2);
-	m_Child_Hypo = fit(MixedModel, f_Child, dat, contrasts=contr3);
+	f_Child = @formula zScore ~ 1 + Test*a1*Sex + (1 + Test | Child);
+	m_Child_SDC = fit(MixedModel, f_Child, dat, contrasts=contr1);
+	m_Child_HeC = fit(MixedModel, f_Child, dat, contrasts=contr2);
+	m_Child_HyC = fit(MixedModel, f_Child, dat, contrasts=contr3);
+	m_Child_PCA = fit(MixedModel, f_Child, dat, contrasts=contr4);
 end
 
 # ╔═╡ bbeed889-dc08-429e-9211-92e7be35ec97
-VarCorr(m_Child_SeqDiff)
+VarCorr(m_Child_SDC)
 
 # ╔═╡ f593f70b-ec70-4e96-8246-f1b8203199e0
-VarCorr(m_Child_Helmert)
+VarCorr(m_Child_HeC)
 
 # ╔═╡ 2ab82d40-e65a-4801-b118-6cfe340708c0
-VarCorr(m_Child_Hypo)
+VarCorr(m_Child_HyC)
+
+# ╔═╡ ba86ee13-a36f-4413-9469-caf168459b5a
+VarCorr(m_Child_PCA)
+
+# ╔═╡ 9de43e0c-5f73-4c8e-bd57-d2eff4fac4c5
+
+
+# ╔═╡ 32b02ec9-d3c9-43f9-940e-52f288778d56
+md"""
+The CPs for the various contrasts are in line with expectations. For the SDC we observe substantial negative CPs between neighboring contrasts. For the orthogonal HeC, all CPs are small; they are uncorrelated. HyC contains some of the SDC contrasts and we observe again the negative CPs. The (roughly) PCA-based contrasts are small with one exception; there is a sizeable CP of +.41 between GM and the core of adjusted physical fitness (c234.15). 
+
+Do these differences in CPs imply that we can move to zcpLMMs when we have orthogonal contrasts? We pursue this question with by refitting the four LMMs with zerocorr() and compare the goodniess of fit.
+"""
+
+# ╔═╡ ebeecc4e-1428-4674-9678-68a7d5c04391
+begin
+	f_Child0 = @formula zScore ~ 1 + Test*a1*Sex + zerocorr(1 + Test | Child);
+	m_Child_SDC0 = fit(MixedModel, f_Child0, dat, contrasts=contr1);
+	m_Child_HeC0 = fit(MixedModel, f_Child0, dat, contrasts=contr2);
+	m_Child_HyC0 = fit(MixedModel, f_Child0, dat, contrasts=contr3);
+	m_Child_PCA0 = fit(MixedModel, f_Child0, dat, contrasts=contr4);
+end
+
+# ╔═╡ fb5f0942-f148-4bf8-bf01-2a848205b906
+MixedModels.likelihoodratiotest(m_Child_SDC0, m_Child_SDC)
+
+# ╔═╡ 8dd002eb-3160-4c5e-b38a-c293c92264ce
+MixedModels.likelihoodratiotest(m_Child_HeC0, m_Child_HeC)
+
+# ╔═╡ b74d474f-6bb3-421c-9a2f-32f90f26ee27
+MixedModels.likelihoodratiotest(m_Child_HyC0, m_Child_HyC)
+
+# ╔═╡ 12ffa71e-0623-4da0-a576-6268172e4eaf
+MixedModels.likelihoodratiotest(m_Child_PCA0, m_Child_PCA)
+
+# ╔═╡ 519fa02a-df7a-4a15-90f1-f951a21f82b6
+md"""
+Obviously, we can not drop CPs from any of the LMMs. The full LMMs all have the same objective, but we can compare the goodness-of-fit statistics of zcpLMMs more directly. 
+"""
+
+# ╔═╡ 23af26f4-8d15-4760-bf3d-51bdc5adb3c0
+begin
+	zcpLMM=["SDC0", "HeC0", "HyC0", "PCA0"]
+	mods = [m_Child_SDC0, m_Child_HeC0, m_Child_HyC0, m_Child_PCA0];
+	gof_summary = sort!(DataFrame(zcpLMM=zcpLMM, dof=dof.(mods), 
+	deviance=deviance.(mods), AIC = aic.(mods), BIC = bic.(mods)), :deviance)
+end
+
+# ╔═╡ 10db1b0f-1389-4beb-98a9-d59822254370
+md"""
+The best fit was obtained for the PCA-based zcpLMM. Somewhat surprisingly the second best fit was obtained for the SDC. The relatively poor performance of HeC-based zcpLMM is puzzling to me. I thought it might be related to imbalance in design in the present data, but this does not appear to be the case. The same comparison of SeqDiff and Helmert Coding also showed a worse fit for the zcp-HeC LMM than the zcp-SDC LMM. 
+"""
 
 # ╔═╡ 65c10c72-cbcf-4923-bdc2-a23aa6ddd856
 md"""
 ### 3.3 VCs and CPs depend on random factor
 VCs and CPs resulting from a set of test contrasts can also be estimated for the random factor `School`. Of course, these VCs and CPs may look different from the ones we just estimated for `Child`. 
 
-`Sex` and `age` vary within `School`. Therefore, we also include their VCs and CPs in this model.
+The effect of `age` (i.e., developmental gain) varies within `School`. Therefore, we also include its VCs and CPs in this model; the school-related VC for `Sex` was not significant. 
 """
 
 # ╔═╡ 9f1d9769-aab3-4e7f-9dc0-6032361d279f
 begin
-	f_School = @formula zScore ~  1 + Test*Sex*(age - 8.5) + (1 + Test + Sex + (age -8.5) | School);
+	f_School = @formula zScore ~  1 + Test*a1*Sex + (1 + Test + a1 | School);
 	m_School_SeqDiff = fit(MixedModel, f_School, dat, contrasts=contr1);
 	m_School_Helmert = fit(MixedModel, f_School, dat, contrasts=contr2);
 	m_School_Hypo = fit(MixedModel, f_School, dat, contrasts=contr3);
+	m_School_PCA = fit(MixedModel, f_School, dat, contrasts=contr4);
 end
 
 # ╔═╡ cbd98fc6-4d7e-42f0-84d0-525ab947187a
@@ -382,6 +445,30 @@ VarCorr(m_School_Helmert)
 
 # ╔═╡ c47058ac-31e6-4b65-8116-e313049f6323
 VarCorr(m_School_Hypo)
+
+# ╔═╡ 90bb43c0-3a8c-4958-8a16-2b8886fd3a28
+VarCorr(m_School_PCA)
+
+# ╔═╡ aae9f4ae-512a-40b6-8734-6bec9fd3ef99
+md" We compare again how much of the fit resides in the CPs."
+
+# ╔═╡ 14122e58-a9dc-420f-8e5e-5572419f0a93
+begin
+  f_School0 = @formula zScore ~ 1 + Test*a1*Sex + zerocorr(1 + Test + a1 | School);
+  m_School_SDC0 = fit(MixedModel, f_School0, dat, contrasts=contr1);
+  m_School_HeC0 = fit(MixedModel, f_School0, dat, contrasts=contr2);
+  m_School_HyC0 = fit(MixedModel, f_School0, dat, contrasts=contr3);
+  m_School_PCA0 = fit(MixedModel, f_School0, dat, contrasts=contr4);
+  # 	
+  zcpLMM2=["SDC0", "HeC0", "HyC0", "PCA0"]
+  mods2 = [m_School_SDC0, m_School_HeC0, m_School_HyC0, m_School_PCA0];
+  gof_summary2 = sort!(DataFrame(zcpLMM=zcpLMM2, dof=dof.(mods2), 
+  deviance=deviance.(mods2), AIC = aic.(mods2), BIC = bic.(mods2)), :deviance)
+end
+
+# ╔═╡ 4f84c162-d2c8-4345-9f9f-5da26f331437
+md""" For the random factor `School` the Helmert contrast, followed by PCA-based contrasts have least information in the CPs; SDC is has the largest contribution from CPs. Interesting.
+"""
 
 # ╔═╡ e84d2f33-ab76-4cd9-989c-0d27a22907ce
 md"""
@@ -428,15 +515,31 @@ Have fun!
 # ╠═6c51fa65-ea7d-46b5-b25b-8af43da4c1e8
 # ╟─7eb0443f-eb43-4664-aeda-1bb254fdf241
 # ╟─830b5655-50c0-425c-a8de-02743867b9c9
+# ╟─47faa5b7-bdc0-4673-a1e0-a0474bf28cce
 # ╟─6492eb08-239f-42cd-899e-9e227999d9e3
 # ╟─74d7a701-91cf-4dd1-9991-f94e156c3291
 # ╠═61e9e6c3-31f5-4037-b0f0-40b82d1d8fdc
 # ╠═bbeed889-dc08-429e-9211-92e7be35ec97
 # ╠═f593f70b-ec70-4e96-8246-f1b8203199e0
 # ╠═2ab82d40-e65a-4801-b118-6cfe340708c0
-# ╟─65c10c72-cbcf-4923-bdc2-a23aa6ddd856
+# ╠═ba86ee13-a36f-4413-9469-caf168459b5a
+# ╠═9de43e0c-5f73-4c8e-bd57-d2eff4fac4c5
+# ╟─32b02ec9-d3c9-43f9-940e-52f288778d56
+# ╠═ebeecc4e-1428-4674-9678-68a7d5c04391
+# ╠═fb5f0942-f148-4bf8-bf01-2a848205b906
+# ╠═8dd002eb-3160-4c5e-b38a-c293c92264ce
+# ╠═b74d474f-6bb3-421c-9a2f-32f90f26ee27
+# ╠═12ffa71e-0623-4da0-a576-6268172e4eaf
+# ╟─519fa02a-df7a-4a15-90f1-f951a21f82b6
+# ╠═23af26f4-8d15-4760-bf3d-51bdc5adb3c0
+# ╟─10db1b0f-1389-4beb-98a9-d59822254370
+# ╠═65c10c72-cbcf-4923-bdc2-a23aa6ddd856
 # ╠═9f1d9769-aab3-4e7f-9dc0-6032361d279f
 # ╠═cbd98fc6-4d7e-42f0-84d0-525ab947187a
 # ╠═d8bcb024-a971-47d6-a3f3-9eff6f3a9386
 # ╠═c47058ac-31e6-4b65-8116-e313049f6323
+# ╠═90bb43c0-3a8c-4958-8a16-2b8886fd3a28
+# ╟─aae9f4ae-512a-40b6-8734-6bec9fd3ef99
+# ╠═14122e58-a9dc-420f-8e5e-5572419f0a93
+# ╟─4f84c162-d2c8-4345-9f9f-5da26f331437
 # ╟─e84d2f33-ab76-4cd9-989c-0d27a22907ce
