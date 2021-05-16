@@ -14,10 +14,10 @@ end
 # ╔═╡ 880ea5ac-a851-446e-8da9-d5f9f161a932
 begin
 	using CSV, RCall, DataFrames, MixedModels, Statistics, StatsBase
-	using CategoricalArrays, Arrow
+	using CategoricalArrays, Arrow, LinearAlgebra
 	using AlgebraOfGraphics
 	using AlgebraOfGraphics: linear
-	using CairoMakie  # for Scatter
+	using CairoMakie, MixedModelsMakie  # for Scatter
 end
 
 # ╔═╡ eebef932-1d63-41e5-998f-9748379c43af
@@ -47,6 +47,12 @@ begin
 	end
 end
 
+# ╔═╡ 44732781-19c5-4800-8a14-6fada0ed9082
+function simplelinreg(x, y)
+    A = cholesky!(Symmetric([length(x) sum(x) sum(y); 0.0 sum(abs2, x) dot(x, y); 0.0 0.0 sum(abs2, y)])).factors
+    ldiv!(UpperTriangular(view(A, 1:2, 1:2)), view(A, 1:2, 3))
+end
+
 # ╔═╡ ee85abd9-0172-44d3-b03a-c6a780d33c72
 md"""
 ### 1.1 Readme for 'EmotikonSubset.rds'
@@ -65,58 +71,36 @@ md"""
  7. score - see units
 
 ### 1.2 Preprocessing
-#### Read data
+"""
+
+# ╔═╡ 5d410833-be44-47a1-a074-f5173ab0035b
+md"""
++ Read
++ Transform
++ Recode
 """
 
 # ╔═╡ 39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
 dat = rcopy(R"readRDS('./data/EmotikonSubset.rds')");
-
-# ╔═╡ 0051ec83-7c30-4d28-9dfa-4c6f5d0259fa
-md"""
-#### Transformations
-"""
 
 # ╔═╡ 7440c439-9d4c-494f-9ac6-18c9fb2fe144
 begin
 	transform!(dat, :age, :age => (x -> x .- 8.5) => :a1); # centered age (linear)
 	transform!(dat,  :a1, :a1  => (x -> x.^2) => :a2);     # centered age (quadr.)
 	select!(groupby(dat,  :Test), :, :score => zscore => :zScore); # z-score
-end;
-
-# ╔═╡ a2603e75-9d53-48ea-bd2c-6b2fca03fe55
-md"""
-#### Checks
-"""
-
-# ╔═╡ 6cd5010f-fb4f-4647-a17a-ae4262f03b17
-dat_a1 = describe(dat)
-
-# ╔═╡ 16c3cdaa-49fa-46d5-a844-03094329fe4c
-viewdf(dat)
-
-# ╔═╡ bbb8b977-29a6-4b0c-b71d-6d37bf22ce19
-# ... by Test
-begin
-	dat_a2 = combine(groupby(dat, [:Test]), 
-                             :score => length, :age => mean,
-                             :score => mean, :score  => std, 
-                             :zScore => mean, :zScore => std)
-	viewdf(dat_a2)
+	recode!(dat.Test, "Run" => "Endurance", "Star_r" => "Coordination",
+	                  "S20_r" => "Speed", "SLJ" => "PowerLOW", "BPT" => "PowerUP")
+	levels!(dat.Sex, ["Boys", "Girls"])
+	viewdf(dat)
 end
 
-# ╔═╡ 64cc1f8e-f831-4a53-976f-dc7600b5634d
-# ... by Test and Sex
-begin
-	dat_a3 = combine(groupby(dat, [:Test, :Sex]), 
-                             :score => length, :age => mean,
-                             :score => mean, :score  => std, 
-                             :zScore => mean, :zScore => std)
-	viewdf(dat_a3)
-end
+# ╔═╡ c6a7fd13-cf84-46bb-8d1e-d58dd9ba0a8a
+
 
 # ╔═╡ 57693079-d489-4e8c-a745-338ccde7eab1
 md"""
-### 1.3 Plot main results
+### 1.3 Figure: Age x Sex x Test
+
 The main results of relevance for this tutorial are shown in this figure. 
 There are developmental gains within the ninth year of life for each of
 the five tests and the tests differ in the magnitude of these gains. 
@@ -124,46 +108,107 @@ Also boys outperform girls on each test and, again, the sex difference
 varies across test.
 """
 
-# ╔═╡ bdaea7b2-406b-4a31-9415-4d956f997c6d
+# ╔═╡ 58d561e2-77c0-43c2-990d-008286de4e5c
+md"""#### 1.3.1 Compute means"""
+
+# ╔═╡ e9280e08-ace4-48cd-ad4a-55501f315d6a
+df = groupby(   # summary grouped data frame by test, sex, rounded age
+	 combine(
+		groupby(
+			select(dat,
+				:age => (x -> cut(x, 8)) => :Age,
+				:Sex,
+				:Test,
+				:zScore,
+				:age
+			),
+			[:Age, :Sex, :Test]),
+		:zScore => mean => :zScore,
+		:age => mean => :ageM
+		),
+	:Test
+);
+
+# ╔═╡ 2574cf1c-4a9a-462b-a2f2-d599a8b42ec1
 md"""
-#### Recode and relevel test names to physical components 
+#### 1.3.2 Regression on `age` by `Sex` for each `Test`
+We compute the simple regression for each test for boys and girls using all observations.
 """
 
-# ╔═╡ fcff6dad-7447-4d7a-886f-faa75836b31f
+# ╔═╡ a7e68776-7a42-4b4a-b540-f26b8b57d520
 begin
-	recode!(dat.Test, "Run" => "Endurance", "Star_r" => "Coordination",
-	  "S20_r" => "Speed", "SLJ" => "PowerLOW", "BPT" => "PowerUP");
-	levels!(dat.Sex,  ["Boys", "Girls"]);
+test_names = levels(dat.Test)
+comp_names = [     # establish order and labels of tbl.Test
+	"Run" => "Endurance",
+	"Star_r" => "Coordination",
+	"S20_r" => "Speed",
+	"SLJ" => "PowerLOW",
+	"BPT" => "PowerUP",
+]
+end;
+
+# ╔═╡ da044d64-8464-4846-8022-443cf8c9ecfd
+begin
+ lms = DataFrame( 
+	   Sex = repeat(["Boys", "Girls"], inner=5), 
+	   Test = repeat(test_names, outer=2),
+	   GM = .0, age = .0, Estimate = "age_Sex_Text")
+  for i in 1:10
+  	local test_sex
+  	test_sex = filter(row -> row.Test == lms.Test[i] && row.Sex == lms.Sex[i], dat) 
+  	lms[i, 3:4] = simplelinreg(test_sex.age, test_sex.zScore)
+  end
+lms
 end
 
-# ╔═╡ 58d561e2-77c0-43c2-990d-008286de4e5c
-md"""#### Compute means"""
+# ╔═╡ eea9c588-f5f8-4905-8774-7031162f9be0
+md"""
+#### 1.3.3 Figure 
+Assemble the facet plot -- still a bit of a hack, but getting there. 
+"""
 
-# ╔═╡ 2880f9af-230d-494b-ad93-119298bf0339
-df = combine(
-	groupby(
-		select(dat, :, :age => (x -> round.(x, digits=1)) => :Age),
-		[:Sex, :Test, :Age],
-	),
-	:zScore => mean => :zScore,
-	:zScore => length => :n
-	);
-
-# ╔═╡ fb4ab041-9087-4dde-80b1-a1c3cd42044b
-md"""#### Generate figure with AoG"""
-
-# ╔═╡ cc71658a-b688-4caa-b783-9e79ca79b609
+# ╔═╡ 1f6446cc-8b40-4cec-880c-3318f78a56f8
 begin
-	design1 = mapping(:age, :zScore, linetype = :Sex, layout_x = :Test);
-	design2 = mapping(:Age, :zScore, color = :Sex, layout_x = :Test);
-	lines = design1 * linear;
-	means = design2 * visual(Scatter, color= [:blue, :red], markersize=6);
-	data(df) * means + data(dat) * lines |> draw
+				# create the figure and panels (axes) within the figure
+	fTest = Figure(resolution = (1000, 600))
+	faxs =  [Axis(fTest[1, i]) for i in eachindex(comp_names)]
+				# iterate over the test labels in the desired order
+	for (i, test_names) in enumerate(last.(comp_names))
+			    # create the label in a box at the top
+		Box(fTest[1, i, Top()], backgroundcolor = :gray)
+    	Label(fTest[1, i, Top()], test_names, padding = (5, 5, 5, 5))
+				# split the subdataframe by sex to plot the points
+		for df in groupby(df[(Test = test_names,)], :Sex)
+			scatter!(
+				faxs[i],
+				df.ageM,				
+				df.zScore,
+				color=ifelse(first(df.Sex) == "Boys", :blue, :red),
+				label=first(df.Sex))
+		end
+	end
+	for j in 1:2
+	for i in 1:5
+		local y
+		y = lms.GM[i+5*(j-1)] .+ lms.age[i+5*(j-1)] .* [8.0, 9.1]
+		lines!(faxs[i], [8.0, 9.1], y, 
+			   color=ifelse(j == 1, :blue, :red),
+			   linewidth = 4)
+	end
+	end
+	axislegend(faxs[1], position = :lt)  # only one legend for point colors
+	faxs[3].xlabel = "Age"               # only one x-axis label
+    faxs[1].ylabel = "zScore [+/- SD]"   # only one y-axis label 
+	hideydecorations!.(faxs[2:end], grid = false)  # y labels on leftmost panel only
+	linkaxes!(faxs...)                   # use the same axes throughout
+	colgap!(fTest.layout, 10)            # tighten the spacing between panels
+	
+	fTest
 end
 
 # ╔═╡ a41bc417-3ca7-4f14-be88-5a91d236e88f
 md"""
-_Figure 1._ Performance differences between 8.0 und 9.0 years by sex 
+_Figure 1._ Performance differences between 8.0 und 9.2 years by sex 
 in the five physical fitness tests presented as z-transformed data computed
 separately for each test. _Endurance_ = cardiorespiratory endurance (i.e., 6-min-
 run test), _Coordination_ = star-run test, _Speed_ = 20-m linear sprint test, 
@@ -212,9 +257,9 @@ begin
 	levels!(dat.Sex,  ["Girls", "Boys"]);
 	contr = merge(
         Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"])),
-	    Dict(:Test => SeqDiffCoding(; levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])),
-        Dict(:TestHC => HelmertCoding(; levels=["S20_r", "SLJ", "Star_r", "Run", "BPT"])),
+		Dict(:Sex => EffectsCoding(levels=["Girls", "Boys"])),
+	    Dict(:Test => SeqDiffCoding(levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])),
+        Dict(:TestHC => HelmertCoding(levels=["S20_r", "SLJ", "Star_r", "Run", "BPT"])),
 	   )
 end;
 
@@ -625,102 +670,92 @@ m1.θ       # Parameter vector for RES (w/o residual); m1.theta
 # ╔═╡ f0538b16-e32e-4393-81d2-1d0ce271d619
 BlockDescription(m1) #  Description of blocks of A and L in a LinearMixedModel
 
-# ╔═╡ 5a62529e-cc10-4e2c-8d75-125951f2dc34
-md"""## 4. Generate figure with CairoMakie"""
-
-# ╔═╡ a7e68776-7a42-4b4a-b540-f26b8b57d520
-lab = levels(dat.Test)
-
-# ╔═╡ 10963e51-7edc-4aa2-9535-dfdf81586b76
-
-
-# ╔═╡ aaeaeca7-438b-441f-83ce-be8de76a4d02
-tlabels = [     # establish order and labels of tbl.Test
-	"Run" => "Endurance",
-	"Star_r" => "Coordination",
-	"S20_r" => "Speed",
-	"SLJ" => "Power Low",
-	"BPT" => "Power Up",
-]
-
-# ╔═╡ af370caf-a44e-45d2-a547-231dfc00697c
-df2 = groupby(   # summary grouped data frame by test, sex, rounded age
-	combine(
-		groupby(
-			select(dat,
-				:age => (x -> round.(x, digits=1)) => :Age,
-				:Sex,
-				:Test => (t -> getindex.(Ref(Dict(tlabels)), t)) => :Test,
-				:zScore,
-			),
-			[:Age, :Sex, :Test]),
-		:zScore => mean => :zScore,
-		),
-	:Test,
-)
-
-# ╔═╡ 9e13dae8-32da-4c2c-bf6b-d9565b253bb1
+# ╔═╡ ae8aae41-58bd-49b6-a56e-d05cad10c22f
 md"""
-**To Do**
-+ Reverse legend entries
-+ Add regression lines for both zero-order and partial effects
+### 3.4 Model "predictions" 
+These commands inform us about extracion of conditional modes/means and (co-)variances, that using the model parameters to improve the predictions for units (levels) of the grouping (random) factors. We need this information, e.g., for partial-effect response profiles (e.g., facet plot) or effect profiles (e.g., caterpillar plot), or visualizing the borrowing-strength effect for correlation parameters (e.g., shrinkage plots). 
+
+```
++ julia> 
++ julia> condVar(m1a)
++ julia> 
++ julia> 
+```
+
+Some plotting functions are currently available from the `MixedModelsMakie` package or via custom functions.
+
+```
++ julia> 
++ julia> caterpillar!(m1, orderby=1)
++ julia> shrinkage!(m1)
+```
+
 """
 
-# ╔═╡ 1f6446cc-8b40-4cec-880c-3318f78a56f8
-begin
-				# create the figure and panels (axes) within the figure
-	fTest = Figure(resolution = (1000, 600))
-	faxs =  [Axis(fTest[1, i]) for i in eachindex(tlabels)]
-				# iterate over the test labels in the desired order
-	for (i, lab) in enumerate(last.(tlabels))
-			    # create the label in a box at the top
-		Box(fTest[1, i, Top()], backgroundcolor = :gray)
-    	Label(fTest[1, i, Top()], lab, padding = (5, 5, 5, 5))
-				# split the subdataframe by sex to plot the points
-		for df in groupby(df2[(Test = lab,)], :Sex)
-			scatter!(
-				faxs[i],
-				df.Age,				
-				df.zScore,
-				color=ifelse(first(df.Sex) == "Boys", :blue, :red),
-				label=first(df.Sex))
-		end
-	end
-	
-	axislegend(faxs[1], position = :lt)  # only one legend for point colors
-	faxs[3].xlabel = "Age"               # only one axis label
+# ╔═╡ 3b24e3f0-4f93-42d5-ba93-eeb23a1e8bd3
+md" #### 3.4.1 Conditional covariances"
 
-	hideydecorations!.(faxs[2:end], grid = false)  # y labels on leftmost panel only
-	linkaxes!(faxs...)                   # use the same axes throughout
-	colgap!(fTest.layout, 10)            # tighten the spacing between panels
-	
-	fTest
+# ╔═╡ da3c1ba5-55cf-41f1-8cd6-8b2784532476
+cv_m1 = condVar(m1);
+
+# ╔═╡ b2e83fe2-b60d-415d-8577-c0958bfe8d0e
+md"""
+They are hard to look at. Let's take pictures.
+#### 3.4.2 Caterpillar plots
+"""
+
+# ╔═╡ 80feb95f-4eb1-4363-8223-1d42f9c637a9
+begin	# Cohort
+	cm_m1_chrt = ranefinfo(m1)[:Cohort];
+	caterpillar!(Figure(; resolution=(800,600)), cm_m1_chrt; orderby=1)
 end
+
+# ╔═╡ 323d7697-62de-4cc0-900d-5137e9e627fb
+begin	# School
+	cm_m1_schl = ranefinfo(m1)[:School];  
+	caterpillar!(Figure(; resolution=(800,600)), cm_m1_schl; orderby=1)
+end
+
+# ╔═╡ e07e768b-a1ba-438a-8082-de818e798565
+md"#### 3.4.2 Shrinkage plots"
+
+# ╔═╡ b044860a-c571-4dcb-bc3c-d5b07fe58695
+begin # Cohort
+	shrnk_m1_chrt = shrinkage(m1)[:Cohort];  
+	shrinkageplot!(Figure(; resolution=(800,600)), shrnk_m1_chrt)
+end
+
+# ╔═╡ 6754c267-0ea7-4369-97a8-dfce330ceed1
+begin  # School 
+	shrnk_m1_schl = shrinkage(m1)[:School];
+	shrinkageplot!(Figure(; resolution=(800,600)), shrnk_m1_schl)
+end
+
+# ╔═╡ 91db2051-b222-41c4-96c5-a2fa0c977bfa
+md" These are just teasers. We will pick this up in a separate tutorial. Enjoy! "
 
 # ╔═╡ Cell order:
 # ╠═9396fcac-b0b6-11eb-3a60-9f2ce25df953
 # ╟─eebef932-1d63-41e5-998f-9748379c43af
 # ╠═880ea5ac-a851-446e-8da9-d5f9f161a932
 # ╠═faafd359-fb38-4f49-9dfd-19cb4f0c5a54
+# ╠═44732781-19c5-4800-8a14-6fada0ed9082
 # ╟─ee85abd9-0172-44d3-b03a-c6a780d33c72
+# ╟─5d410833-be44-47a1-a074-f5173ab0035b
 # ╠═39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
-# ╟─0051ec83-7c30-4d28-9dfa-4c6f5d0259fa
 # ╠═7440c439-9d4c-494f-9ac6-18c9fb2fe144
-# ╟─a2603e75-9d53-48ea-bd2c-6b2fca03fe55
-# ╠═6cd5010f-fb4f-4647-a17a-ae4262f03b17
-# ╠═16c3cdaa-49fa-46d5-a844-03094329fe4c
-# ╠═bbb8b977-29a6-4b0c-b71d-6d37bf22ce19
-# ╠═64cc1f8e-f831-4a53-976f-dc7600b5634d
+# ╠═c6a7fd13-cf84-46bb-8d1e-d58dd9ba0a8a
 # ╟─57693079-d489-4e8c-a745-338ccde7eab1
-# ╟─bdaea7b2-406b-4a31-9415-4d956f997c6d
-# ╠═fcff6dad-7447-4d7a-886f-faa75836b31f
 # ╟─58d561e2-77c0-43c2-990d-008286de4e5c
-# ╠═2880f9af-230d-494b-ad93-119298bf0339
-# ╟─fb4ab041-9087-4dde-80b1-a1c3cd42044b
-# ╠═cc71658a-b688-4caa-b783-9e79ca79b609
+# ╠═e9280e08-ace4-48cd-ad4a-55501f315d6a
+# ╟─2574cf1c-4a9a-462b-a2f2-d599a8b42ec1
+# ╠═a7e68776-7a42-4b4a-b540-f26b8b57d520
+# ╠═da044d64-8464-4846-8022-443cf8c9ecfd
+# ╟─eea9c588-f5f8-4905-8774-7031162f9be0
+# ╠═1f6446cc-8b40-4cec-880c-3318f78a56f8
 # ╟─a41bc417-3ca7-4f14-be88-5a91d236e88f
 # ╟─c6c6f056-b8b9-4190-ac14-b900bafa04df
-# ╟─c5326753-a03b-4739-a82e-90ffa7c1ebdb
+# ╠═c5326753-a03b-4739-a82e-90ffa7c1ebdb
 # ╟─f7d6782e-dcd3-423c-a7fe-c125d8e4f810
 # ╠═9a885065-59db-47a0-aa0a-8574f136a834
 # ╟─8a302aae-565e-4a5c-8285-881dd36d873d
@@ -788,16 +823,19 @@ end
 # ╠═815c070a-8cc1-40f3-91bb-7c38f904399b
 # ╠═4eef686a-6943-45a8-8309-e1b264af34b5
 # ╠═89a1cfec-2b87-4bf9-95e3-7c7312069af8
-# ╟─1ee16dfe-97d6-4958-b9c4-cf2812691057
+# ╠═1ee16dfe-97d6-4958-b9c4-cf2812691057
 # ╠═7302b067-270f-4d6a-a0c6-fabd46cc72b0
 # ╠═acd9a3eb-6eae-4e09-8932-e44f91e725b4
 # ╠═1c9de228-93a4-4d1a-82b5-48fe22cfe0f1
 # ╠═363dcab6-f9f7-42e7-9de7-6a9616cb060f
 # ╠═f0538b16-e32e-4393-81d2-1d0ce271d619
-# ╟─5a62529e-cc10-4e2c-8d75-125951f2dc34
-# ╠═a7e68776-7a42-4b4a-b540-f26b8b57d520
-# ╠═10963e51-7edc-4aa2-9535-dfdf81586b76
-# ╠═aaeaeca7-438b-441f-83ce-be8de76a4d02
-# ╠═af370caf-a44e-45d2-a547-231dfc00697c
-# ╟─9e13dae8-32da-4c2c-bf6b-d9565b253bb1
-# ╠═1f6446cc-8b40-4cec-880c-3318f78a56f8
+# ╟─ae8aae41-58bd-49b6-a56e-d05cad10c22f
+# ╟─3b24e3f0-4f93-42d5-ba93-eeb23a1e8bd3
+# ╠═da3c1ba5-55cf-41f1-8cd6-8b2784532476
+# ╟─b2e83fe2-b60d-415d-8577-c0958bfe8d0e
+# ╠═80feb95f-4eb1-4363-8223-1d42f9c637a9
+# ╠═323d7697-62de-4cc0-900d-5137e9e627fb
+# ╠═e07e768b-a1ba-438a-8082-de818e798565
+# ╠═b044860a-c571-4dcb-bc3c-d5b07fe58695
+# ╠═6754c267-0ea7-4369-97a8-dfce330ceed1
+# ╟─91db2051-b222-41c4-96c5-a2fa0c977bfa
