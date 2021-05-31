@@ -13,7 +13,7 @@ end
 
 # ╔═╡ 7a3de02b-c423-496e-bf92-9981d71e5eab
 begin
-	using RCall, DataFrames, DataFramesMeta, CategoricalArrays
+	using RCall, RData, Chain, DataFrames, CategoricalArrays
 	using MixedModels, MixedModelsMakie
 
 	using LinearAlgebra, Statistics
@@ -43,26 +43,23 @@ We also have a dataset from a replication and extension of this study (Kliegl, K
 
 # ╔═╡ 8ec41516-4609-489e-9a84-f5f5a2d9fc51
 begin
-	R"load('./data/KWDYZ.rda')";
-	dat1 = @rget KWDYZ;
-	dat1 = select(dat1, :subj => :Subj, :tar => :CTR, :rt);
-
-	# Set the factor levels
-	dat1 = @linq dat1 |>
-        transform(CTR = levels!(categorical(:CTR), ["val", "sod", "dos", "dod"]));
-
-	first(dat1, 5)
-	describe(dat1)
-
+	dat1 = @chain begin
+		only(values(load("./data/KWDYZ.rda")))     # .rda -> Dict{String,Any}
+		select(:subj => :Subj, :tar => :CTR, :rt)
+        transform(:CTR => (v -> levels!(v, ["val", "sod", "dos", "dod"])) => :CTR)
+	end
+	
 	# Descriptive statistics
 	cellmeans = combine(groupby(dat1, [:CTR]), 
                              :rt => mean, :rt  => std, :rt => length, 
-                             :rt => (x -> std(x)/sqrt(length(x))))
+                             :rt => (x -> std(x)/sqrt(length(x))) => :rt_semean)
 
 
-	OM = mean(dat1.rt)             # mean of observations
-	GM = mean(cellmeans.rt_mean)   # grand mean = mean of conditions
+	OM, GM = mean(dat1.rt), mean(cellmeans.rt_mean)
 end
+
+# ╔═╡ d5a246f0-b172-4a67-828a-74fd58853de5
+cellmeans
 
 # ╔═╡ cb63bd4b-5f0e-49d1-a257-2b83c1687975
 md"""## SeqDiffCoding 
@@ -257,7 +254,7 @@ begin
 	contrasts(df2$C) <- contr.helmert(3)
 
 	X <- model.matrix( ~ A*B*C, df2) # get design matrix for experiment
-	X_2 <- MASS::fractions(t(X[,2:12])) # transponse; we don't need the intercept 		column
+	X_2 <- MASS::fractions(t(X[,2:12])) # transpose; we don't need the intercept 		column
 """
 
 X_2 = @rget X_2;
@@ -363,7 +360,8 @@ al. 2020](https://doi.org/10.1016/j.jml.2019.104038) for more information).
 # ╟─09a33b05-568e-427a-bd66-812d271d1791
 # ╟─7a3de02b-c423-496e-bf92-9981d71e5eab
 # ╟─28c37807-b83f-4c3e-848d-a7401b4eda29
-# ╟─8ec41516-4609-489e-9a84-f5f5a2d9fc51
+# ╠═8ec41516-4609-489e-9a84-f5f5a2d9fc51
+# ╠═d5a246f0-b172-4a67-828a-74fd58853de5
 # ╟─cb63bd4b-5f0e-49d1-a257-2b83c1687975
 # ╠═8ffba70f-fc97-47a2-b973-3c0f2047eb9b
 # ╟─4e9359a3-2533-4ce8-b2fd-26411e84f59c
@@ -374,8 +372,8 @@ al. 2020](https://doi.org/10.1016/j.jml.2019.104038) for more information).
 # ╠═bb97e862-24ad-4ce5-9011-429a0e69e5ab
 # ╟─71528268-41fe-4de5-8725-1c65c4839c65
 # ╠═e2372cb1-03d4-4404-bfef-640ad5653792
-# ╠═142c86d3-e340-494c-8b52-8f2013993a19
-# ╟─0bb71abe-433c-44e3-bff4-eb26e63bee2d
+# ╟─142c86d3-e340-494c-8b52-8f2013993a19
+# ╠═0bb71abe-433c-44e3-bff4-eb26e63bee2d
 # ╟─0cf43493-af05-4744-a154-d7209251ae8f
 # ╠═2d778d8e-949c-4a7b-a774-770c6bc4bce6
 # ╟─a71103ca-a680-45ac-ba02-61a5660cc157

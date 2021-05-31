@@ -6,11 +6,11 @@ using InteractiveUtils
 
 # ╔═╡ f9030e18-e484-11ea-24e0-3132afabdf83
 begin
-	using Arrow, DataFrames, DataFramesMeta, CategoricalArrays 
+	using Arrow, DataFrames, CategoricalArrays, Chain
 	using Statistics, LinearAlgebra
 	using MixedModels, MixedModelsMakie
-	using AlgebraOfGraphics, CairoMakie 
-end		
+	using AlgebraOfGraphics, CairoMakie
+end
 
 # ╔═╡ 1357b670-e484-11ea-2275-cba956358da4
 md"# The Sleepstudy: Speed - for a change ..."
@@ -59,19 +59,24 @@ First we attach the various packages needed, define a few helper functions, read
 
 # ╔═╡ ae074801-0697-4811-baef-76e8ca8fac86
 function viewdf(x)
-		DataFrame(Arrow.Table(take!(Arrow.write(IOBuffer(), x))))
+	DataFrame(Arrow.Table(take!(Arrow.write(IOBuffer(), x))))
 end
 
 # ╔═╡ 5d02bc2b-5ae4-4017-a482-a35fb144b3cf
-md" Two simple regression functions. **RK:** Why does the first one not work here?"
+md"""
+Two simple regression functions. **RK:** Why does the first one not work here?
+
+**DB:** It is because the `[...]` notation is evaluated at the time of function definition, not function evaluation.
+I changed the first function to use `hcat` and the second to return a Tuple instead of a vector.
+"""
 
 # ╔═╡ 51b19e16-b24c-4332-b5b8-6d5a5605f397
-linreg1(x::AbstractVector{T}, y::AbstractVector{T}) where {T<:AbstractFloat} = [ones(length(x)) x]\y
+linreg1(x::AbstractVector{T}, y::AbstractVector{T}) where {T<:AbstractFloat} = hcat(ones(length(x)), x)\y
 
 # ╔═╡ f1d7982a-0a5c-40ae-8e09-9976cb49ea0f
 function simplelinreg(x, y)
     A = cholesky!(Symmetric([length(x) sum(x) sum(y); 0.0 sum(abs2, x) dot(x, y); 0.0 0.0 sum(abs2, y)])).factors
-    ldiv!(UpperTriangular(view(A, 1:2, 1:2)), view(A, 1:2, 3))
+    (ldiv!(UpperTriangular(view(A, 1:2, 1:2)), view(A, 1:2, 3))...,)
 end
 
 # ╔═╡ e09a7f5c-1b17-4d60-958c-b84807c6638e
@@ -85,21 +90,25 @@ The `sleepstudy` data are one of the datasets available with recent versions of 
 + Compute a sort index giving for `Subj`s' mean `speed`
 + Covert `Subj` to CategoricalArray (i.e., factor)
 + Relevel `Subj` according to speed-based sort index
+
+**DB:** I changed the name from data to df because the name data is used in AlgebraOfGraphics
+
+**DB:** I think it will be better to use a GroupedDataFrame and just extract the order.  I will write that up under a separate PR.
 """
 
 # ╔═╡ 66a6f3bc-e485-11ea-2b47-13a48b5d7e52
 begin
-	data = DataFrame(MixedModels.dataset("sleepstudy"));
-	rename!(data, :subj => :Subj, :days => :day);
-    transform!(data, :reaction, :reaction => (x -> 1000 ./ x) => :speed);
-	ix = sort(combine(groupby(data, :Subj), :speed => mean), :speed_mean);
-	data = @linq data |> transform(Subj = levels!(categorical(:Subj), ix.Subj));
-	sort!(data, :Subj);
-	viewdf(data)
+	df = @chain DataFrame(MixedModels.dataset("sleepstudy")) begin
+		rename!(:subj => :Subj, :days => :day)
+	    transform!(:reaction => (x -> 1000 ./ x) => :speed)
+	end
+	ix = sort(combine(groupby(df, :Subj), :speed => mean), :speed_mean)
+	transform!(df, :Subj => (v -> levels!(categorical(v), ix.Subj)) => :Subj)
+	viewdf(df)
 end
 
 # ╔═╡ 61076594-0398-40c9-9190-08c820c6da97
-describe(data)
+describe(df)
 
 # ╔═╡ 44adec0b-eec0-4b85-9161-01c11525c831
 md""" ## Estimates for pooled data
@@ -109,7 +118,7 @@ In the first analysis we ignore the dependency of observvations due to repeated 
 
 # ╔═╡ da75674a-aca1-4aa1-8d71-5dde799f7e90
 begin
-	coef = simplelinreg(data.day, data.speed);
+	coef = simplelinreg(df.day, df.speed)
 	pld = DataFrame(Subj=ix.Subj, day_0=coef[1], effect=coef[2], 
 		  estimate = "Pooled");
 end
@@ -133,7 +142,7 @@ begin
   wss = DataFrame(Subj=ix.Subj, day_0 = .0, effect = .0, estimate = "within-Subj" );
   for i in 1:length(ix.Subj)
   	local subj_df
-  	subj_df = filter(row -> row.Subj == ix.Subj[i], data) 
+  	subj_df = filter(row -> row.Subj == ix.Subj[i], df) 
   	wss[i, 2:3] = simplelinreg(subj_df.day, subj_df.speed)
   end
   wss
@@ -153,7 +162,7 @@ begin
 		  Box(fSubj[1, i, Top()], backgroundcolor = :gray)
 		Label(fSubj[1, i, Top()], wss.Subj[i], padding = (5, 5, 5, 5))
 		local subj_df
-  	    subj_df = filter(row -> row.Subj == ix.Subj[i], data) 
+  	    subj_df = filter(row -> row.Subj == ix.Subj[i], df) 
 		scatter!(faxs[i], subj_df.day, subj_df.speed)
 		local y
 		y = wss.day_0[i] .+ wss.effect[i] .* x
@@ -174,7 +183,7 @@ begin
 		  Box(fSubj[2, i, Top()], backgroundcolor = :gray)
 		Label(fSubj[2, i, Top()], wss.Subj[i+6], padding = (5, 5, 5, 5))
 		local subj_df
-  	    subj_df = filter(row -> row.Subj == ix.Subj[i+6], data) 
+  	    subj_df = filter(row -> row.Subj == ix.Subj[i+6], df) 
 		scatter!(faxs[i], subj_df.day, subj_df.speed)
 		local y
 		y = wss.day_0[i+6] .+ wss.effect[i+6] .* x
@@ -195,7 +204,7 @@ begin
 		  Box(fSubj[3, i, Top()], backgroundcolor = :gray)
 		Label(fSubj[3, i, Top()], wss.Subj[i+12], padding = (5, 5, 5, 5))
 		local subj_df
-  	    subj_df = filter(row -> row.Subj == ix.Subj[i+12], data) 
+  	    subj_df = filter(row -> row.Subj == ix.Subj[i+12], df) 
 		scatter!(faxs[i], subj_df.day, subj_df.speed)
 		local y
 		y = wss.day_0[i+12] .+ wss.effect[i+12] .* x
@@ -213,7 +222,7 @@ end
 md"## Basic LMM"
 
 # ╔═╡ 8a902898-e485-11ea-2d50-b3c44d666f9c
-m1 = fit(MixedModel, @formula(speed ~ 1+day+(1+day|Subj)), data)
+m1 = fit(MixedModel, @formula(speed ~ 1+day+(1+day|Subj)), df)
 
 # ╔═╡ 06560c54-e4ac-11ea-3b36-e57ee4bc3134
 md"""
@@ -233,7 +242,7 @@ The `zerocorr` function applied to a random-effects term estimates one paremeter
 """
 
 # ╔═╡ d68c3c14-e485-11ea-0b41-6d234ab4b676
-m2 = fit(MixedModel, @formula(speed ~ 1+day+zerocorr(1+day|Subj)),data)
+m2 = fit(MixedModel, @formula(speed ~ 1+day+zerocorr(1+day|Subj)),df)
 
 # ╔═╡ 8e066b36-e4ad-11ea-2655-47a9a8d3c031
 md"""
@@ -268,12 +277,10 @@ md" ## Combine the three types of estimates"
 
 # ╔═╡ 3abc830c-4e1a-4d09-beec-46e6ff9f6cbf
 begin
-	cms_wss_pld = vcat(cms, wss, pld)
-	cms_wss_pld = @linq cms_wss_pld |>
-       transform(
-       estimate = levels!(categorical(:estimate), 
-		["Conditional mean", "within-Subj", "Pooled"])
-       );
+	cms_wss_pld = @chain vcat(cms, wss, pld) begin
+       transform!(:estimate => (v -> levels!(categorical(v), 
+		["Conditional mean", "within-Subj", "Pooled"])) => :estimate)
+	end
 	viewdf(cms_wss_pld)
 end
 
