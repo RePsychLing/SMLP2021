@@ -21,7 +21,7 @@ begin
 end
 
 # ╔═╡ 74516f96-31f4-4c94-b963-fd4ed17eb758
-using Arrow, CairoMakie, DataAPI, DataFrames, PlutoUI
+using Arrow, CairoMakie, DataFrames, PlutoUI
 
 # ╔═╡ 07f5c367-1be6-4708-9f5c-c23f646b229b
 tbl = Arrow.Table("./data/fggk21.arrow")
