@@ -176,7 +176,7 @@ llvid = let path = path, fig = Figure(), frate = frate, l = l
 	ax.ylabel = "Log likelihood"
 	
 	
-	record(fig, joinpath(path, "fit_animation.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
+	record(fig, joinpath(path, "ll_animation.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
 		push!(pp[], Point2f0(idx, ll))
 		autolimits!(ax)
 	end
@@ -234,7 +234,7 @@ fitvid = let path = path, fig = Figure(; resolution=(500, 500)), frate = frate, 
 	xlims!(limits...)
 	ylims!(limits...)
 	
-	record(fig, joinpath(path, "fit_animation.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
+	record(fig, joinpath(path, "fit_pred.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
 		predicted[] = fitted(updateL!(setθ!(m, θ)))
 	end
 end
