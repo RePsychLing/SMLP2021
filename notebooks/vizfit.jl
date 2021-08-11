@@ -4,6 +4,15 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : missing
+        el
+    end
+end
+
 # ╔═╡ 3c7a1a36-fa48-11eb-00d9-9f2255af9992
 begin
 	using CairoMakie
@@ -14,8 +23,11 @@ begin
 	using PlutoUI
 	using StatsBase
 	
-	using MixedModels: dataset, _check_nlopt_return, updateL!, setθ!
+	using MixedModels: dataset, _check_nlopt_return, updateL!, setθ!, nθ
 end
+
+# ╔═╡ f9e37852-7116-4af6-a61d-2ea03b1ba4ac
+StatsBase.coefnames(re::MixedModels.AbstractReMat) = re.cnames
 
 # ╔═╡ 1fa2d657-5506-436a-a25a-5203c20e510a
 begin
@@ -36,10 +48,7 @@ end
 # ╔═╡ 9f8ca9f2-ebf4-4b40-a331-9cc4e4ba0bc6
 function logged_fit!(m::LinearMixedModel{T}, log::Vector{<:Tuple}; progress::Bool=true, REML::Bool=false) where {T}
     optsum = m.optsum
-    # this doesn't matter for LMM, but it does for GLMM, so let's be consistent
-    if optsum.feval > 0
-        throw(ArgumentError("This model has already been fitted. Use refit!() instead."))
-    end
+    MixedModels.unfit!(m)
     opt = Opt(optsum)
     optsum.REML = REML
     prog = ProgressUnknown("Minimizing"; showspeed=true)
@@ -80,12 +89,21 @@ function logged_fit!(m::LinearMixedModel{T}, log::Vector{<:Tuple}; progress::Boo
     return m
 end
 
+# ╔═╡ 2c3990e0-0253-4c4d-99ed-69636e7cf4e7
+@bind frate PlutoUI.Slider(1:100; default=10, show_value=true)
+
+# ╔═╡ b80d463a-cb34-49f9-ab69-2abeb9b629e9
+models = Dict("sleepstudy" => LinearMixedModel(@formula(reaction ~ 1 + days + (1 + days|subj)), dataset(:sleepstudy)),
+		     "mrk17" => LinearMixedModel(m6frm, mrk17; contrasts=contr),
+			 "kb07" => LinearMixedModel(@formula(rt_trunc ~ 1+spkr*prec*load+(1+spkr+prec+load|subj)+(1+spkr+prec+load|item)), dataset(:kb07)),
+			"kb07_int" => LinearMixedModel(@formula(rt_trunc ~ 1+spkr*prec*load+(1|subj)+(1|item)), dataset(:kb07)));
+
+# ╔═╡ c259a93c-4c42-4708-8a57-6ea312aedc04
+@bind mname PlutoUI.Select(collect(keys(models)); default="sleepstudy")
+
 # ╔═╡ f0e95022-ee10-470b-9753-53d2510309ae
 begin
-	frate = 50
-	# m = LinearMixedModel(@formula(reaction ~ 1 + days + (1 + days|subj)), dataset(:sleepstudy))
-	m = LinearMixedModel(m6frm, mrk17; contrasts=contr)
-	# m = LinearMixedModel(@formula(rt_trunc ~ 1+spkr*prec*load+(1+spkr+prec+load|subj)+(1+spkr+prec+load|item)), dataset(:kb07))
+	m = models[mname]
 	l = [(copy(m.optsum.initial), m.optsum.finitial)]
 	logged_fit!(m, l)
 	m
@@ -94,13 +112,37 @@ end
 # ╔═╡ 08efd2c8-faaf-4be2-99aa-a3c3d41166de
 m.optsum
 
+# ╔═╡ 844ec630-e50e-4ccd-bb0a-265777be21bb
+@bind grp PlutoUI.Select(collect(string.(fnames(m))))
+
 # ╔═╡ c42c9c10-798c-46c9-9013-0cd9a092cd10
 path = mktempdir()
 
-# ╔═╡ 96affd87-52ee-4eff-8f8a-7099fe7666e1
-shrinkagevid = let path = path, fig = Figure(; resolution=(1000, 1000)), frate = frate, m = m, gf = first(fnames(m)), θref = 10000 * m.optsum.initial
+# ╔═╡ 42726a44-4723-4d9f-954e-79635ea0d365
+llvid = let path = path, fig = Figure(), frate = frate, l = l
+
+	pp = Node(Point2f0[])
+    ax = Axis(fig[1, 1])
 	
-	# gf = :item
+	lines!(ax, pp)
+	ax.xlabel = "Iteration"
+	ax.ylabel = "-2 Log likelihood"
+	
+	
+	record(fig, joinpath(path, "ll_animation.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
+		push!(pp[], Point2f0(idx, ll))
+		autolimits!(ax)
+	end
+end
+
+# ╔═╡ 7a69147b-0b13-4339-9d53-9748ed506c03
+LocalResource(llvid)
+
+# ╔═╡ 96affd87-52ee-4eff-8f8a-7099fe7666e1
+shrinkagevid = let path = path, fig = Figure(; resolution=(700, 700)), frate = frate, m = m, gf = grp, θref = 10000 * m.optsum.initial
+	
+	gf = Symbol(gf)
+	#gf = :item
 	reind = findfirst(==(gf), fnames(m))
 	
 	if isnothing(reind)
@@ -114,6 +156,179 @@ shrinkagevid = let path = path, fig = Figure(; resolution=(1000, 1000)), frate =
 	cols = Dict()
 	uvidx = 0
 	uv = Node[]
+	
+    for i in 2:k                          # strict lower triangle of panels
+		uvidx += 1
+		row = Axis[]
+        for j in 1:(i - 1)
+            ax = Axis(fig[i - 1, j]; aspect=AxisAspect(1))
+			push!(row, ax)
+			col = get!(cols, j, Axis[])
+			push!(col, ax)
+            xy = Node(Point2f0.(view(reref, j, :), view(reref, i, :)))
+            # reference points
+			scatter!(ax, xy; color=(:red, 0.25))
+            uvpp = Node(Point.(view(reref, j, :), view(reref, i, :)))
+			push!(uv, uvpp)
+			# first so arrow heads don't obscure pts
+			movement = lift(uvpp) do vals
+			 	Point.(first.(vals) .- first.(xy[]), last.(vals) .-  last.(xy[]))
+			end
+			arrows!(ax, xy, movement)        
+			# conditional means at estimates
+			scatter!(ax, uvpp; color=(:blue, 0.25))  #
+            if i == k              # add x labels on bottom row
+                ax.xlabel = string(cnms[j])
+            else
+                hidexdecorations!(ax; grid=false)
+            end
+            if isone(j)            # add y labels on left column
+                ax.ylabel = string(cnms[i])
+            else
+                hideydecorations!(ax; grid=false)
+            end
+        end
+		linkyaxes!(row...)
+    end
+	
+	foreach(values(cols)) do col
+		linkxaxes!(col...)
+	end	
+	record(fig, joinpath(path, "shrinkage_animation.mp4"), l, framerate = frate) do (θ, ll)
+		reest = ranef(updateL!(setθ!(m, θ)))[reind]
+		uvidx = 0
+		for i in 2:k, j in 1:(i - 1)
+			uvidx += 1
+			uv[uvidx][] = Point.(view(reest, j, :), view(reest, i, :))
+		end
+	end
+end
+
+# ╔═╡ fb767203-4f5f-48fc-acce-e235f7e79868
+LocalResource(shrinkagevid)
+
+# ╔═╡ 2fbf6c68-7fe7-4162-8087-4c6184644274
+VarCorr(m)
+
+# ╔═╡ d5df3d20-dbf5-4d12-a87e-9a2d7e3f78d0
+bouncyθvid = let path = path, fig = Figure(), frate = 5, l = l, m = m
+	
+	supertitle = Node("-2 log likelihood: ")
+	l1 = Label(fig[1, 1], supertitle, textsize = 15)
+	l1.tellwidth = false
+	itertitle = Node("iter:")
+	l2 = Label(fig[1, 2], itertitle, textsize = 15)
+	l2.tellwidth = false
+	titlelayout = GridLayout()
+	fig[1, 1:2] = titlelayout
+	
+	axpar = Axis(fig[2, :])
+	axpar.tellwidth = true
+	θs = Node(copy(m.optsum.initial))
+	xs = 1:length(θs[])
+	iter = Node(1.0)
+	maxiter = length(l)
+	idx = 1
+	color = lift(iter) do iter
+		(:black, 0.75 ^ (iter - idx))
+	end
+	scatter!(axpar, xs, θs; color)
+	lines!(axpar, xs, θs; color)
+	autolimits!(axpar)
+	
+	θnames = sizehint!(String[], sum(nθ, m.reterms))
+	for (g, gname) in enumerate(fnames(m))
+		cnms = coefnames(m.reterms[g])
+		for i in 1:length(cnms), j in 1:i
+			if i == j
+				push!(θnames, string("σ_", gname, "_", cnms[i]))
+			else
+				push!(θnames, string("ρ_", gname, "_", cnms[j], "_", cnms[i]))
+			end		
+		end
+	end
+ 	axpar.xticks[] = (xs, θnames)
+	axpar.xticklabelrotation[] = pi/4
+	axpar.xlabel = "θ components"
+	axpar.ylabel = "θ values"
+	
+	vid = record(fig, joinpath(path, "bouncy_theta_animation.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
+		iter[] = idx
+		color = lift(iter) do iter
+			(:black, 0.75 ^ (iter - idx))
+		end
+		scatter!(axpar, xs, θ; color)
+		lines!(axpar, xs, θ; color)
+		supertitle[] = "-2 log likelihood: $(round(Int,ll))"
+		itertitle[] = "iter: $(idx)"
+		autolimits!(axpar)
+	end
+	vid
+end
+
+# ╔═╡ b265d9ec-ad73-4a8d-aeba-b765b2ea9bcd
+LocalResource(bouncyθvid)
+
+# ╔═╡ fc29e293-8eab-4f3b-99c3-4ae11389f881
+θvid = let path = path, fig = Figure(), frate = frate, l = l
+	
+	ppll = Node(Point2f0[])
+    axll = Axis(fig[1, 1])
+	lines!(axll, ppll)
+	axll.ylabel = "-2 log likelihood"
+	hidexdecorations!(axll)
+	
+	#grplens 
+	
+	# coridx = findall(==(-Inf), m.lowerbd)
+	# vardidx = findall(==(0), m.lowerbd)
+	
+	ppθ = Node(zeros(Float32, length(m.θ), 0))
+	isvar = Int.(m.θ .!= 0)
+	grps = mapreduce(vcat, enumerate(m.reterms)) do (idx, re)
+		idx * ones(Int, MixedModels.nθ(re))
+	end
+	cols = cgrad(:Dark2_8; categorical=unique(grps), alpha=0.6)[grps]
+	labs = string.(MixedModels.fname.(m.reterms[grps]))
+	
+	axθ = Axis(fig[2, 1])
+	s = series!(axθ, ppθ; solid_color=cols, labels=labs)
+	axislegend(axθ; unique=true)
+	axθ.xlabel = "Iteration"
+	axθ.ylabel = "θ"
+	linkxaxes!(axll, axθ)
+	
+	vid = record(fig, joinpath(path, "fit_animation.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
+		push!(ppll[], Point2f0(idx, ll))
+		ppθ[] = hcat(ppθ[], reshape(θ, :, 1))
+		autolimits!(axθ)
+		autolimits!(axll)
+	end
+	vid
+end
+
+# ╔═╡ d706802d-7df1-41cf-81f0-8856718ea10a
+LocalResource(θvid)
+
+# ╔═╡ 1f537c5f-1da2-4f21-961c-6a27c607404a
+llshrinkagevid = let path = path, fig = Figure(; resolution=(1200, 1000)), frate = frate, m = m, gf = grp, θref = 10000 * m.optsum.initial
+	
+	gf = Symbol(gf)
+	# gf = :item
+	reind = findfirst(==(gf), fnames(m))
+	
+	if isnothing(reind)
+        throw(ArgumentError("gf=$gf is not one of the grouping factor names, $(fnames(m))"))
+    end
+	
+	reest = ranef(updateL!(setθ!(m, m.optsum.final)))[reind] 
+	reref = ranef(updateL!(setθ!(m, θref)))[reind]    
+    cnms = coefnames(m.reterms[reind])
+    k = size(reest, 1)
+	cols = Dict()
+	uvidx = 0
+	uv = Node[]
+	θnames = String[]
 	
     for i in 2:k                          # strict lower triangle of panels
 		uvidx += 1
@@ -145,89 +360,201 @@ shrinkagevid = let path = path, fig = Figure(; resolution=(1000, 1000)), frate =
             else
                 hideydecorations!(ax; grid=false)
             end
+			
         end
 		linkyaxes!(row...)
     end
-
+	
 	foreach(values(cols)) do col
 		linkxaxes!(col...)
-	end	
-	record(fig, joinpath(path, "shrinkage_animation.mp4"), l, framerate = frate) do (θ, ll)
+	end
+	
+	ppll = Node(Point2f0[])
+    axll = Axis(fig[k, 1:k])
+	lines!(axll, ppll)
+	axll.ylabel = "-2 log likelihood"
+	hidexdecorations!(axll)
+	
+	
+	ppθ = Node(zeros(Float32, nθ(m.reterms[reind]), 0))
+	θstart = reind == 1 ? 1 : sum(nθ, m.reterms[1:(reind-1)]) + 1
+	θind = θstart:(θstart + nθ(m.reterms[reind]) - 1)
+	
+	θnames = sizehint!(String[], nθ(m.reterms[reind]))
+	cnms = coefnames(m.reterms[reind])
+	for i in 1:length(cnms), j in 1:i
+		if i == j
+			push!(θnames, string("σ_", cnms[i]))
+		else
+			push!(θnames, string("ρ_", cnms[j], "_", cnms[i]))
+		end		
+	end
+	
+	axθ = Axis(fig[k+1, 1:k])
+	kwargs = if length(θnames) < 10
+		(; color=:Paired_10, labels=θnames)
+	else
+		(; solid_color=(:black, 0.6))
+	end
+	s = series!(axθ, ppθ; kwargs...)
+	# axislegend(axθ; unique=true)
+	axθ.xlabel = "Iteration"
+	axθ.ylabel = "θ"
+	linkxaxes!(axll, axθ)
+		
+	record(fig, joinpath(path, "llshrinkage_animation.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
 		reest = ranef(updateL!(setθ!(m, θ)))[reind]
 		uvidx = 0
 		for i in 2:k, j in 1:(i - 1)
 			uvidx += 1
 			uv[uvidx][] = Point.(view(reest, j, :), view(reest, i, :))
 		end
+		push!(ppll[], Point2f0(idx, ll))
+		ppθ[] = hcat(ppθ[], reshape(view(θ, θind), :, 1))
+		autolimits!(axll)
+		autolimits!(axθ)
 	end
 end
 
-# ╔═╡ fb767203-4f5f-48fc-acce-e235f7e79868
-LocalResource(shrinkagevid)
+# ╔═╡ 66fce748-8bf5-4ff7-8644-0d6293e08dda
+LocalResource(llshrinkagevid)
 
-# ╔═╡ 42726a44-4723-4d9f-954e-79635ea0d365
-llvid = let path = path, fig = Figure(), frate = frate, l = l
-
-	pp = Node(Point2f0[])
-    ax = Axis(fig[1, 1])
+# ╔═╡ 2ae64f75-2fdf-4efd-9228-8e4efd49bfc8
+bouncyshrinkagevid = let path = path, fig = Figure(; resolution=(1200, 1000)), frate = frate, m = m, gf = grp, θref = 10000 * m.optsum.initial
 	
-	lines!(ax, pp)
-	ax.xlabel = "Iteration"
-	ax.ylabel = "Log likelihood"
+	gf = Symbol(gf)
+	# gf = :item
+	reind = findfirst(==(gf), fnames(m))
 	
+	if isnothing(reind)
+        throw(ArgumentError("gf=$gf is not one of the grouping factor names, $(fnames(m))"))
+    end
 	
-	record(fig, joinpath(path, "ll_animation.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
-		push!(pp[], Point2f0(idx, ll))
-		autolimits!(ax)
+	supertitle = Node("-2 log likelihood: ")
+	# Label(fig[0, 1], supertitle, textsize = 15)
+	
+	reest = ranef(updateL!(setθ!(m, m.optsum.final)))[reind] 
+	reref = ranef(updateL!(setθ!(m, θref)))[reind]    
+    cnms = coefnames(m.reterms[reind])
+    k = size(reest, 1)
+	cols = Dict()
+	uvidx = 0
+	uv = Node[]
+	θnames = String[]
+	
+    for i in 2:k                          # strict lower triangle of panels
+		uvidx += 1
+		row = Axis[]
+        for j in 1:(i - 1)
+            ax = Axis(fig[i - 1, j])
+			push!(row, ax)
+			col = get!(cols, j, Axis[])
+			push!(col, ax)
+            xy = Node(Point2f0.(view(reref, j, :), view(reref, i, :)))
+            # reference points
+			scatter!(ax, xy; color=(:red, 0.25))
+            uvpp = Node(Point.(view(reref, j, :), view(reref, i, :)))
+			push!(uv, uvpp)
+			# first so arrow heads don't obscure pts
+			movement = lift(uvpp) do vals
+			 	Point.(first.(vals) .- first.(xy[]), last.(vals) .-  last.(xy[]))
+			end
+			arrows!(ax, xy, movement)        
+			# conditional means at estimates
+			scatter!(ax, uvpp; color=(:blue, 0.25))  #
+            if i == k              # add x labels on bottom row
+                ax.xlabel = string(cnms[j])
+            else
+                hidexdecorations!(ax; grid=false)
+            end
+            if isone(j)            # add y labels on left column
+                ax.ylabel = string(cnms[i])
+            else
+                hideydecorations!(ax; grid=false)
+            end
+			
+        end
+		linkyaxes!(row...)
+    end
+	
+	foreach(values(cols)) do col
+		linkxaxes!(col...)
 	end
-end
-
-# ╔═╡ 7a69147b-0b13-4339-9d53-9748ed506c03
-LocalResource(llvid)
-
-# ╔═╡ fc29e293-8eab-4f3b-99c3-4ae11389f881
-θvid = let path = path, fig = Figure(), frate = frate, l = l
+	
 	
 	ppll = Node(Point2f0[])
-    axll = Axis(fig[1, 1])
+    axll = Axis(fig[k, 1:k])
 	lines!(axll, ppll)
-	axll.ylabel = "Log likelihood"
-	hidexdecorations!(axll)
+	axll.ylabel = "-2 log likelihood"
+	axll.xlabel = "iteration"
 	
-	#grplens 
+	axpar = Axis(fig[(k+1):(k+1), 1:k])
+	θs = Node(copy(m.optsum.initial))
+	xs = 1:length(θs[])
+	iter = Node(1.0)
+	maxiter = length(l)
+	idx = 1
+	color = lift(iter) do iter
+		(:black, 0.75 ^ (iter - idx))
+	end
+	scatter!(axpar, xs, θs; color)
+	lines!(axpar, xs, θs; color)
+	autolimits!(axpar)
 	
-	ppθ = Node(zeros(Float32, length(m.θ), 0))
-
-	axθ = Axis(fig[2, 1])
-	series!(axθ, ppθ; solid_color=:black)
-	axθ.xlabel = "Iteration"
-	axθ.ylabel = "θ"
-	linkxaxes!(axll, axθ)
+	θnames = sizehint!(String[], sum(nθ, m.reterms))
+	for (g, gname) in enumerate(fnames(m))
+		cnms = coefnames(m.reterms[g])
+		for i in 1:length(cnms), j in 1:i
+			if i == j
+				push!(θnames, string("σ_", gname, "_", cnms[i]))
+			else
+				push!(θnames, string("ρ_", gname, "_", cnms[j], "_", cnms[i]))
+			end		
+		end
+	end
+ 	axpar.xticks[] = (xs, θnames)
+	axpar.xticklabelrotation[] = pi/4
+	axpar.xlabel = "θ components"
+	axpar.ylabel = "θ values"
 	
-	vid = record(fig, joinpath(path, "fit_animation.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
+	vid = record(fig, joinpath(path, "bouncy_shrinkage_animation.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
+		
+		reest = ranef(updateL!(setθ!(m, θ)))[reind]
+		uvidx = 0
+		for i in 2:k, j in 1:(i - 1)
+			uvidx += 1
+			uv[uvidx][] = Point.(view(reest, j, :), view(reest, i, :))
+		end
+		
 		push!(ppll[], Point2f0(idx, ll))
-		ppθ[] = hcat(ppθ[], reshape(θ, :, 1))
-		autolimits!(axθ)
 		autolimits!(axll)
+		
+		iter[] = idx
+		color = lift(iter) do iter
+			(:black, 0.75 ^ (iter - idx))
+		end
+		scatter!(axpar, xs, θ; color)
+		lines!(axpar, xs, θ; color)
+		supertitle[] = "-2 log likelihood: $(round(ll))"
+		autolimits!(axpar)
+
 	end
 	vid
 end
 
-# ╔═╡ d706802d-7df1-41cf-81f0-8856718ea10a
-LocalResource(θvid)
-
-# ╔═╡ e3b80423-0fda-47d7-9f14-9e56037d411d
-MixedModels.getθ(m.reterms[1])
+# ╔═╡ 1540378e-664c-4f51-a641-35bc98eefc8e
+LocalResource(bouncyshrinkagevid)
 
 # ╔═╡ 23ef35f6-cfb5-422d-a7af-e9af7a5520b5
-fitvid = let path = path, fig = Figure(; resolution=(500, 500)), frate = frate, l = l, m = m
-
+fitvid = let path = path, fig = Figure(; resolution=(700, 700)), frate = frate, l = l, m = m
+	supertitle = Node("-2 log likelihood: ")
 	limits = [0.9, 1.1] .* extrema(response(m))
 	observed = Node(response(m))
 	predicted = Node(ones(size(observed[])) * mean(observed[]))
-    ax = Axis(fig[1, 1])
+    ax = Axis(fig[1, 1:2]; aspect=AxisAspect(1))
+	Label(fig[0, 1], supertitle, textsize = 15)
 	
-	scatter!(ax, observed, predicted, color=(:blue, 0.3))
+	scatter!(ax, observed, predicted; color=(:steelblue, 0.3))
 	ax.xlabel = "Observed"
 	ax.ylabel = "Fitted"
 	abline!(ax, 0, 1; linestyle=:dash, color=(:black, 1.0))
@@ -236,6 +563,7 @@ fitvid = let path = path, fig = Figure(; resolution=(500, 500)), frate = frate, 
 	
 	record(fig, joinpath(path, "fit_pred.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
 		predicted[] = fitted(updateL!(setθ!(m, θ)))
+		supertitle[] = "-2 log likelihood: $(round(Int,ll))"
 	end
 end
 
@@ -243,7 +571,55 @@ end
 LocalResource(fitvid)
 
 # ╔═╡ c23c46cf-2963-4009-9b02-fc11772fcc88
-MixedModels.datasets()
+resvid = let path = path, fig = Figure(), frate = frate, l = l, m = m
+	supertitle = Node("-2 log likelihood: ")
+	Label(fig[1, 1], supertitle, textsize = 15)
+	
+	limits = [0.9, 1.1] .* extrema(response(m))
+	res = Node(zeros(Float32, nobs(m)))
+	predicted = Node(ones(size(res[])) * mean(res[]))
+    ax = Axis(fig[2, 1:2])
+	
+	scatter!(ax, predicted, res; color=(:steelblue, 0.3))
+	ax.xlabel = "Fitted"
+	ax.ylabel = "Residual"
+	hlines!(ax, [0]; linestyle=:dash, color=(:black, 1.0))
+	xlims!(limits...)
+	
+	record(fig, joinpath(path, "res_pred.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
+		predicted[] = fitted(updateL!(setθ!(m, θ)))
+		res[] = residuals(m)
+		supertitle[] = "-2 log likelihood: $(round(Int,ll))"
+		autolimits!(ax) # can't find a way to do this just for y
+		xlims!(limits...)
+	end
+end
+
+# ╔═╡ c9c4b58f-01dc-46d0-8a0b-6191c4f17ecf
+LocalResource(resvid)
+
+# ╔═╡ 7dddde1b-0e2a-4972-81c9-85f6790e27f1
+qqvid = let path = path, fig = Figure(; resolution=(700, 700)), frate = frate, l = l, m = m
+	supertitle = Node("-2 log likelihood: ")
+	Label(fig[1, 1], supertitle, textsize = 15)
+	
+	res = Node(zeros(Float32, nobs(m)))
+    ax = Axis(fig[2, 1:2]; aspect=AxisAspect(1))
+	
+	qqnorm!(ax, res; alpha=(:steelblue, 0.3))
+	ax.xlabel = "Standard Normal Quantiles"
+	ax.ylabel = "Standardized Observed Quantiles"
+
+	
+	record(fig, joinpath(path, "res_pred.mp4"), enumerate(l), framerate = frate) do (idx, (θ, ll))
+		res[] = residuals(updateL!(setθ!(m, θ)))
+		supertitle[] = "-2 log likelihood: $(round(ll))"
+		autolimits!(ax)
+	end
+end
+
+# ╔═╡ 07d07f17-55ec-4092-8183-48d9dca4b21e
+LocalResource(qqvid)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1391,20 +1767,34 @@ version = "3.5.0+0"
 
 # ╔═╡ Cell order:
 # ╠═3c7a1a36-fa48-11eb-00d9-9f2255af9992
+# ╠═f9e37852-7116-4af6-a61d-2ea03b1ba4ac
 # ╠═1fa2d657-5506-436a-a25a-5203c20e510a
 # ╠═9f8ca9f2-ebf4-4b40-a331-9cc4e4ba0bc6
+# ╠═2c3990e0-0253-4c4d-99ed-69636e7cf4e7
+# ╟─b80d463a-cb34-49f9-ab69-2abeb9b629e9
+# ╟─c259a93c-4c42-4708-8a57-6ea312aedc04
 # ╠═f0e95022-ee10-470b-9753-53d2510309ae
 # ╠═08efd2c8-faaf-4be2-99aa-a3c3d41166de
+# ╟─844ec630-e50e-4ccd-bb0a-265777be21bb
 # ╠═c42c9c10-798c-46c9-9013-0cd9a092cd10
-# ╠═96affd87-52ee-4eff-8f8a-7099fe7666e1
-# ╠═fb767203-4f5f-48fc-acce-e235f7e79868
 # ╠═42726a44-4723-4d9f-954e-79635ea0d365
 # ╠═7a69147b-0b13-4339-9d53-9748ed506c03
+# ╠═96affd87-52ee-4eff-8f8a-7099fe7666e1
+# ╠═fb767203-4f5f-48fc-acce-e235f7e79868
+# ╠═2fbf6c68-7fe7-4162-8087-4c6184644274
+# ╠═d5df3d20-dbf5-4d12-a87e-9a2d7e3f78d0
+# ╠═b265d9ec-ad73-4a8d-aeba-b765b2ea9bcd
 # ╠═fc29e293-8eab-4f3b-99c3-4ae11389f881
 # ╠═d706802d-7df1-41cf-81f0-8856718ea10a
-# ╠═e3b80423-0fda-47d7-9f14-9e56037d411d
+# ╠═1f537c5f-1da2-4f21-961c-6a27c607404a
+# ╠═66fce748-8bf5-4ff7-8644-0d6293e08dda
+# ╠═2ae64f75-2fdf-4efd-9228-8e4efd49bfc8
+# ╠═1540378e-664c-4f51-a641-35bc98eefc8e
 # ╠═23ef35f6-cfb5-422d-a7af-e9af7a5520b5
 # ╠═080d9245-3f7b-4154-8d50-c1ca338d3ffb
 # ╠═c23c46cf-2963-4009-9b02-fc11772fcc88
+# ╠═c9c4b58f-01dc-46d0-8a0b-6191c4f17ecf
+# ╠═7dddde1b-0e2a-4972-81c9-85f6790e27f1
+# ╠═07d07f17-55ec-4092-8183-48d9dca4b21e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
