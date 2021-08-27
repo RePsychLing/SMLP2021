@@ -6,15 +6,14 @@ using InteractiveUtils
 
 # ╔═╡ f9030e18-e484-11ea-24e0-3132afabdf83
 begin
-	using AlgebraOfGraphics
 	using CairoMakie
-	using Chain         # Like pipes but better
-	using DataFrameMacros
+	using DataFrameMacros # simplified dplyr-like data wrangling 
 	using DataFrames
+	using KernelDensity
 	using MixedModels
 	using MixedModelsMakie
-	using PlutoUI       # user interface tools for Pluto notebooks
-	using Random        # random number generators
+	using PlutoUI         # user interface tools for Pluto notebooks
+	using Random          # random number generators
 	CairoMakie.activate!(type="svg")
 end
 
@@ -23,8 +22,9 @@ md"# Analysis of the sleepstudy data"
 
 # ╔═╡ 2a6a0106-e484-11ea-2d1c-65ea0604a1e3
 md"""
-The `sleepstudy` data are from a study on the effects of sleep deprivation on
-response time.  Eighteen subjects were allowed only 3 hours of time to sleep each night for 9 successive nights.  Their reaction time was measured each day, starting the day before the first night of sleep deprivation, when the subjects were on their regular sleep schedule.
+The `sleepstudy` data are from a study on the effects of sleep deprivation on response time.
+Eighteen subjects were allowed only 3 hours of time to sleep each night for 9 successive nights.
+Their reaction time was measured each day, starting the day before the first night of sleep deprivation, when the subjects were on their regular sleep schedule.
 
 !!! note
     This description is inaccurate.
@@ -44,7 +44,7 @@ Multiple Julia statements in the same Pluto cell must be enclosed in a `begin ..
 
 # ╔═╡ 786e3abe-e4ae-11ea-0965-6bbd681d0f72
 md"""
-The `sleepstudy` data are one of the datasets available with recent versions of the `MixedModels` package.
+The `sleepstudy` data are one of the datasets available with the `MixedModels` package.
 """
 
 # ╔═╡ 66a6f3bc-e485-11ea-2b47-13a48b5d7e52
@@ -60,7 +60,8 @@ Resource("https://github.com/palday/MixedModelsMakie.jl/blob/main/examples/sleep
 
 # ╔═╡ 4296090a-89a9-4b4b-b444-789b7641cf3c
 md"""
-Each panel shows the data from one subject and a line fit by least squares to that subject's data.  Starting at the lower left panel and proceeding across rows, the panels are ordered by increasing intercept of the least squares line.
+Each panel shows the data from one subject and a line fit by least squares to that subject's data.
+Starting at the lower left panel and proceeding across rows, the panels are ordered by increasing intercept of the least squares line.
 
 There are some deviations from linearity within the panels but the deviations are neither substantial nor systematic.
 """
@@ -77,10 +78,12 @@ This model includes fixed effects for the intercept, representing the typical re
 The parameter estimates are about 250 ms. typical reaction time without deprivation and a typical increase of 10.5 ms. per day of sleep deprivation.
 
 The random effects represent shifts from the typical behavior for each subject.
-The shift in the intercept has a standard deviation of about 24 ms. which would indicate a range of about 200 ms. to 300 ms. in the intercepts.
+The shift in the intercept has a standard deviation of about 24 ms. which would suggest a range of about 200 ms. to 300 ms. in the intercepts.
 Similarly within-subject slopes would be expected to have a range of about 0 ms./day up to 20 ms./day.
 
-The random effects for the slope and for the intercept are allowed to be correlated within subject.  The estimated correlation, 0.08, is small.
+The random effects for the slope and for the intercept are allowed to be correlated within subject.
+The estimated correlation, 0.08, is small.
+This estimate is not shown in the default display above but is shown in the output from `VarCorr` (variance components and correlations).
 """
 
 # ╔═╡ 5b623bf7-cdeb-42bc-b716-9e7d92dc6ab7
@@ -114,11 +117,20 @@ The `zerocorr` function applied to a random-effects term creates uncorrelated ve
 """
 
 # ╔═╡ d68c3c14-e485-11ea-0b41-6d234ab4b676
-m2 = fit(MixedModel, @formula(reaction ~ 1+days+zerocorr(1+days|subj)),sleepstudy)
+m2 = fit(MixedModel, @formula(reaction ~ 1+days+zerocorr(1+days|subj)), sleepstudy)
+
+# ╔═╡ a87e4894-185e-4797-acc4-810d14e00be3
+md"""
+Again, the default display doesn't show that there is no correlation parameter to be estimated in this model, but the `VarCorr` display does.
+"""
+
+# ╔═╡ 09a720b2-6bc9-424a-9690-b0f920ffb8fc
+VarCorr(m2)
 
 # ╔═╡ 8e066b36-e4ad-11ea-2655-47a9a8d3c031
 md"""
-This model has a slightly lower log-likelihood than does `m1` but one less parameter than `m1`.   A likelihood-ratio test can be used to compare these nested models.
+This model has a slightly lower log-likelihood than does `m1` and one fewer parameter than `m1`.
+A likelihood-ratio test can be used to compare these nested models.
 """
 
 # ╔═╡ ec436546-e485-11ea-19b8-a15f2f8247df
@@ -152,6 +164,11 @@ An alternative, more geometrically inspired definition of "degrees of freedom", 
 Interestingly, the model with fewer parameters, `m2`, has a greater sum of the leverage values than the model with more parameters, `m1`.
 We're not sure what to make of that.
 
+In both cases the sum of the leverage values is toward the upper end of the range of possible values, which is the rank of the fixed-effects model matrix (2) up to the rank of the fixed-effects plus the random effects model matrix (2 + 36 = 38).
+
+!!! note
+    I think that the upper bound may be 36, not 38, because the two columns of X lie in the column span of Z
+
 This comparison does show, however, that a simple count of the parameters in a mixed-effects model can underestimate, sometimes drastically, the model complexity.
 This is because a single variance component or multiple components can add many dimensions to the linear predictor.
 """
@@ -160,10 +177,10 @@ This is because a single variance component or multiple components can add many 
 md"""
 ## Some diagnostic plots
 
-In mixed-effects model the *linear predictor* expression incorporates *fixed-effects parameters*, which summarize trends for the population or certain well-defined subpopulations, and *random effects* which summarize deviations associated with the *experimental units* or *observational units* - individual subjects, in this case.
+In mixed-effects models the *linear predictor* expression incorporates *fixed-effects parameters*, which summarize trends for the population or certain well-defined subpopulations, and *random effects* which represent deviations associated with the *experimental units* or *observational units* - individual subjects, in this case.
 The random effects are modeled as unobserved random variables.
 
-The conditional means of these random variables, sometimes called the BLUPs or *Best Linear Unbiased Predictors*, are not simply the least squares estimates.  They are attenuated or *shrunk* towards zero to reflect the fact that the individuals are assumed to come from a population.  A *shrinkage plot* shows the BLUPs compared to the values without any shrinkage.  If the BLUPs are similar to the unshrunk values then the more complicated model accounting for individual differences is supported.  If the BLUPs are strongly shrunk towards zero then the additional complexity in the model to account for individual differences is not providing sufficient increase in fidelity to the data to warrant inclusion.
+The conditional means of these random variables, sometimes called the BLUPs or *Best Linear Unbiased Predictors*, are not simply the least squares estimates.  They are attenuated or *shrunk* towards zero to reflect the fact that the individuals are assumed to come from a population.  A *shrinkage plot* shows the BLUPs from the model fit compared to the values without any shrinkage.  If the BLUPs are similar to the unshrunk values then the more complicated model accounting for individual differences is supported.  If the BLUPs are strongly shrunk towards zero then the additional complexity in the model to account for individual differences is not providing sufficient increase in fidelity to the data to warrant inclusion.
 """
 
 # ╔═╡ 1cceace0-ac44-45b6-b1b3-ed08b9117de0
@@ -189,7 +206,7 @@ md"""
 
 The speed of fitting linear mixed-effects models using `MixedModels.jl` allows for using simulation-based approaches to inference instead of relying on approximate standard errors.
 A *parametric bootstrap sample* for model `m` is a collection of models of the same form as `m` fit to data values simulated from `m`.
-That is, we pretend that `m` and its parameter values are the *true* parameter values, simulate data from these values and estimate parameters from the simulated data.
+That is, we pretend that `m` and its parameter values are the *true* parameter values, simulate data from these values, and estimate parameters from the simulated data.
 
 Simulating and fitting a substantial number of model fits, 2000 in this case, takes only a few seconds, following which we extract a data frame of the parameter estimates and plot densities of some of these estimates.
 """
@@ -201,15 +218,20 @@ begin
 	allpars = DataFrame(m1bstp.allpars)
 end
 
+# ╔═╡ 8b12a630-dbe8-49fb-95b9-921f7d99c408
+md"""
+An empirical density plot of the estimates for the fixed-effects coefficients shows the normal distribution, "bell-curve", shape as we might expect.
+"""
+
 # ╔═╡ 60cd9450-206f-4b10-889c-220a16f2877b
 begin
-	f1 = Figure(; resolution=(1000, 600))
+	f1 = Figure(; resolution=(1000, 400))
 	CairoMakie.density!(
-		Axis(f1[1,1], xlabel="Intercept"),
+		Axis(f1[1,1], xlabel="Intercept [ms]"),
 		@subset(allpars, :type=="β" && :names=="(Intercept)").value,
 	)
 	CairoMakie.density!(
-		Axis(f1[1,2], xlabel="Coefficient of days"),
+		Axis(f1[1,2], xlabel="Coefficient of days [ms/day]"),
 		@subset(allpars, :type=="β" && :names=="days").value,
 	)
 	f1
@@ -229,7 +251,7 @@ md"""
 The intervals look reasonable except that the upper bound on the interval for ρ, the correlation coefficient, is 1.0 .
 It turns out that the estimates of ρ have a great deal of variability.
 
-Even more alarming, some of these ρ values are undefined (denoted `NaN`) because the way it is calculated involves a division by zero.
+Even more alarming, some of these ρ values are undefined (denoted `NaN`) because the way ρ is calculated can create a division by zero.
 """
 
 # ╔═╡ db1ebea6-891d-4342-8f1a-fd8eb427e51d
@@ -237,14 +259,15 @@ describe(@subset(allpars, :type=="ρ"))
 
 # ╔═╡ 6b528bbd-b045-4094-81a8-7ec835295672
 md"""
-This is one of the few occasions where a histogram would be preferred to a density plot.
+Because there are several values on the boundary (`ρ = 1.0`) and a *pulse* like this is not handled well by a density plot, we plot this sample as a histogram.
 """
 
 # ╔═╡ 8aabba31-e50a-4c4a-b92a-cd8c539d97d9
 hist(
 	@subset(allpars, :type=="ρ" && isfinite(:value)).value,
 	bins=40,
-	axis=(; xlabel="Estimated within-subject correlation, ρ, of the random effects"),
+	axis=(; xlabel="Estimated correlation of the random effects"),
+	figure=(; resolution=(500, 500)),
 )
 
 # ╔═╡ 5ff4c7a8-ef90-4585-b5df-adbc15064f85
@@ -271,25 +294,48 @@ begin
 	f2
 end
 
+# ╔═╡ b870e931-1faa-4d48-8292-f7f604f94fbb
+md"""
+The estimates of the coefficients, β₁ and β₂, are not highly correlated as shown in a scatterplot of the bootstrap estimates.
+"""
+
+# ╔═╡ 3e8f75ee-9ae0-47b3-a5b8-a0622c4bbb5b
+vcov(m1, corr=true)  # correlation estimate from the model
+
+# ╔═╡ 2f9215c3-78b4-4a54-8c51-419950712d3f
+let
+	vals = disallowmissing(
+		Array(
+			select(unstack(DataFrame(m1bstp.β), :iter, :coefname, :β), Not(:iter)),
+		),
+	)
+	scatter(
+		vals,
+		color=(:blue, 0.20),
+		axis=(; xlabel="Intercept", ylabel="Coefficient of days"),
+		figure=(; resolution=(500, 500)),
+	)
+	contour!(kde(vals))
+	current_figure()
+end
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-Chain = "8be319e6-bccf-4806-a6f7-6fae938471bc"
 DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+KernelDensity = "5ab0869b-81aa-558d-bb23-cbf5423bbe9b"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
 MixedModelsMakie = "b12ae82c-6730-437f-aff9-d2c38332a376"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [compat]
-AlgebraOfGraphics = "~0.5.2"
 CairoMakie = "~0.6.4"
-Chain = "~0.4.8"
 DataFrameMacros = "~0.1.0"
 DataFrames = "~1.2.2"
+KernelDensity = "~0.6.3"
 MixedModels = "~4.0.0"
 MixedModelsMakie = "~0.3.3"
 PlutoUI = "~0.7.9"
@@ -318,12 +364,6 @@ deps = ["LinearAlgebra"]
 git-tree-sha1 = "84918055d15b3114ede17ac6a7182f68870c16f7"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 version = "3.3.1"
-
-[[deps.AlgebraOfGraphics]]
-deps = ["Colors", "Dates", "FileIO", "GLM", "GeoInterface", "GeometryBasics", "GridLayoutBase", "KernelDensity", "Loess", "Makie", "PlotUtils", "PooledArrays", "RelocatableFolders", "StatsBase", "StructArrays", "Tables"]
-git-tree-sha1 = "8e4d8d012a5fb4f12cf60ae8658afa3aeffe5873"
-uuid = "cbdf2221-f076-402e-a563-3d30da359d67"
-version = "0.5.2"
 
 [[deps.Animations]]
 deps = ["Colors"]
@@ -410,11 +450,6 @@ deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll",
 git-tree-sha1 = "f2202b55d816427cd385a9a4f3ffb226bee80f99"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+0"
-
-[[deps.Chain]]
-git-tree-sha1 = "cac464e71767e8a04ceee82a889ca56502795705"
-uuid = "8be319e6-bccf-4806-a6f7-6fae938471bc"
-version = "0.4.8"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
@@ -532,12 +567,6 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 [[deps.DelimitedFiles]]
 deps = ["Mmap"]
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
-
-[[deps.Distances]]
-deps = ["LinearAlgebra", "Statistics", "StatsAPI"]
-git-tree-sha1 = "abe4ad222b26af3337262b8afb28fab8d215e9f8"
-uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
-version = "0.10.3"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -669,12 +698,6 @@ deps = ["Distributions", "LinearAlgebra", "Printf", "Reexport", "SparseArrays", 
 git-tree-sha1 = "f564ce4af5e79bb88ff1f4488e64363487674278"
 uuid = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
 version = "1.5.1"
-
-[[deps.GeoInterface]]
-deps = ["RecipesBase"]
-git-tree-sha1 = "38a649e6a52d1bea9844b382343630ac754c931c"
-uuid = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
-version = "0.5.5"
 
 [[deps.GeometryBasics]]
 deps = ["EarCut_jll", "IterTools", "LinearAlgebra", "StaticArrays", "StructArrays", "Tables"]
@@ -926,12 +949,6 @@ version = "2.36.0+0"
 [[deps.LinearAlgebra]]
 deps = ["Libdl"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-
-[[deps.Loess]]
-deps = ["Distances", "LinearAlgebra", "Statistics"]
-git-tree-sha1 = "b5254a86cf65944c68ed938e575f5c81d5dfe4cb"
-uuid = "4345ca2d-374a-55d4-8d30-97f9976e7612"
-version = "0.5.3"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
@@ -1640,6 +1657,8 @@ version = "3.5.0+0"
 # ╟─c01a9062-e4ac-11ea-383c-471462a1e649
 # ╟─3e3b227c-e4ad-11ea-3c24-fb23d26e1171
 # ╠═d68c3c14-e485-11ea-0b41-6d234ab4b676
+# ╟─a87e4894-185e-4797-acc4-810d14e00be3
+# ╠═09a720b2-6bc9-424a-9690-b0f920ffb8fc
 # ╟─8e066b36-e4ad-11ea-2655-47a9a8d3c031
 # ╠═ec436546-e485-11ea-19b8-a15f2f8247df
 # ╟─d0856ae0-e4ab-11ea-0016-2f170c65768f
@@ -1650,14 +1669,18 @@ version = "3.5.0+0"
 # ╟─03bbb963-c1e1-440c-a8be-955ab7ed99da
 # ╟─5c054d25-e462-4206-b0f0-efb535ceab6d
 # ╠═66e6feb0-5eb7-47d6-b625-2bf5656baf49
-# ╠═60cd9450-206f-4b10-889c-220a16f2877b
+# ╟─8b12a630-dbe8-49fb-95b9-921f7d99c408
+# ╟─60cd9450-206f-4b10-889c-220a16f2877b
 # ╟─b08551ae-3f6f-40a0-8fac-c95ef804e9ee
 # ╠═03067cdd-f035-461c-9529-51b010a14f77
 # ╟─935cfa11-6e1a-4b5b-80f3-105d9ac46326
 # ╠═db1ebea6-891d-4342-8f1a-fd8eb427e51d
 # ╟─6b528bbd-b045-4094-81a8-7ec835295672
-# ╠═8aabba31-e50a-4c4a-b92a-cd8c539d97d9
+# ╟─8aabba31-e50a-4c4a-b92a-cd8c539d97d9
 # ╟─5ff4c7a8-ef90-4585-b5df-adbc15064f85
 # ╟─18d87c1c-6596-4f04-b1b6-88ecfd59985b
+# ╟─b870e931-1faa-4d48-8292-f7f604f94fbb
+# ╠═3e8f75ee-9ae0-47b3-a5b8-a0622c4bbb5b
+# ╟─2f9215c3-78b4-4a54-8c51-419950712d3f
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
