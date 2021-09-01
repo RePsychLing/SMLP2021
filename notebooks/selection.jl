@@ -19,6 +19,7 @@ begin
 	using CairoMakie
 	using DataFrames
 	using PlutoUI
+	CairoMakie.activate!(type="svg") # use SVG (other options include PNG)
 end
 
 # ╔═╡ 07f5c367-1be6-4708-9f5c-c23f646b229b

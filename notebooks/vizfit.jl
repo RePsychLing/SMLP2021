@@ -24,6 +24,10 @@ begin
 	using StatsBase
 	
 	using MixedModels: dataset, _check_nlopt_return, updateL!, setθ!, nθ
+	# use SVG (other options include PNG)
+	# doesn't matter too much here since the plots here are all videos
+	# and not static
+	CairoMakie.activate!(type="svg")
 end
 
 # ╔═╡ f9e37852-7116-4af6-a61d-2ea03b1ba4ac

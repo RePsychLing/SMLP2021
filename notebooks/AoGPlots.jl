@@ -11,6 +11,7 @@ begin
 	using AlgebraOfGraphics
 	using DataFrames
 	using Statistics
+	CairoMakie.activate!(type="svg") # use SVG (other options include PNG)
 end
 
 # ╔═╡ 45e5fcb6-be53-4c03-8415-173578219d06

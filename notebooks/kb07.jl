@@ -11,6 +11,7 @@ begin
 	using DataFrames
 	using MixedModels
 	using Random
+	CairoMakie.activate!(type="svg") # use SVG (other options include PNG)
 end
 
 # ╔═╡ a1076b78-8993-11eb-176b-63b0349cff6d
