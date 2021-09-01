@@ -4,105 +4,209 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 8b38927e-11f1-45fd-b630-44113f0aac3d
-begin 
-	using CairoMakie   # for displaying static plots in a Pluto notebook
-	using Arrow
-	using AlgebraOfGraphics
-	using DataFrames
-	using Statistics
-	CairoMakie.activate!(type="svg") # use SVG (other options include PNG)
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : missing
+        el
+    end
 end
 
-# ╔═╡ 45e5fcb6-be53-4c03-8415-173578219d06
-md"""
-# Creating multi-panel plots
-
-This notebook shows creating a multi-panel plot similar to Figure 2 of Fühner, Golle, Granacher, & Kliegl (2021).
-
-The data have been saved as an Arrow-format file.
-"""
-
-# ╔═╡ a8bc0d0e-fc13-4196-95c9-5922ed400cb4
-dat = Arrow.Table("./data/fggk21.arrow");
-
-# ╔═╡ 4825ea74-1902-4423-883d-a7b00a2aa359
-typeof(dat)
-
-# ╔═╡ 52b65f0d-f09e-47c8-81b5-624a09bc1c9a
-md"""
-## Creating a summary data frame
-
-The response to be plotted is the mean score by `Test` and `Sex` and `age`, rounded to the nearest 0.1 years.
-
-The first task is to round the `age` to 1 digit after the decimal place, which can be done with `select` applied to a `DataFrame`.
-In some ways this is the most complicated expression in creating the plot so we will break it down.
-`select` is applied to `DataFrame(dat)`, which is the conversion of the `Arrow.Table`, `dat`, to a `DataFrame`.
-This is necessary because an `Arrow.Table` is immutable but a `DataFrame` can be modified.
-
-The arguments after the `DataFrame` describe how to modify the contents.
-The first `:` indicates that all the existing columns should be included.
-The other expression can be pairs (created with the `=>` operator) of the form `:col => function` or of the form `:col => function => :newname`.
-(See the [documentation of the DataFrames package](http://juliadata.github.io/DataFrames.jl/stable/) for details.)
-
-In this case the function is an anonymous function of the form `round.(x, digits=1)` where "dot-broadcasting" is used to apply to the entire column (see [this documentation](https://docs.julialang.org/en/v1/manual/functions/#man-vectorized) for details).
-"""
-
-# ╔═╡ 53da799e-f794-42a5-9255-6503fde6dfa0
-describe(select(DataFrame(dat), :, :age => (x -> round.(x, digits=1)) => :rnd_age))
-
-# ╔═╡ fa5e6e67-d37b-414d-8f3a-34f623f423af
-md"""
-The next stage is a *group-apply-combine* operation to group the rows by `Sex`, `Test` and `rnd_age` then apply `mean` to the `zScore` and also apply `length` to `zScore` to record the number in each group.
-"""
-
-# ╔═╡ f27eab8e-5fbd-442c-b4a2-a95b4c29cd52
-df = combine(
-	groupby(
-		select(DataFrame(dat), :, :age => ByRow(x -> round(x; digits=1)) => :age),
-		[:Sex, :Test, :age],
-	),
-	:zScore => mean => :zScore,
-	:zScore => length => :n,
-)
-
-# ╔═╡ e61f86b4-2e9e-4522-af2f-b97097e4c95c
-md"""
-## Creating the plot
-
-The `AlgebraOfGraphics` package applies operators to the results of functions such as `data` (specify the data table to be used), `mapping` (designate the roles of columns), and `visual` (type of visual presentation).
-"""
-
-# ╔═╡ 27dbedac-3270-4c4b-ba42-3a99c6c54cba
+# ╔═╡ 3c7a1a36-fa48-11eb-00d9-9f2255af9992
 begin
-	design = mapping(:age, :zScore; color = :Sex, col = :Test)
-	lines = design * linear()
-	means = design * visual(Scatter, markersize=5)
-	data(df) * means + data(dat) * lines |> draw
+	using CairoMakie
+	using DataFrames
+	using MixedModels
+	using NLopt
+	using ProgressMeter
+	using PlutoUI
+	using StatsBase
+	
+	using MixedModels: dataset, _check_nlopt_return, updateL!, setθ!, nθ
+	# use SVG (other options include PNG)
+	# doesn't matter too much here since the plots here are all videos
+	# and not static
+	CairoMakie.activate!(type="svg")
 end
 
-# ╔═╡ d81256c0-fa19-4926-b723-795cc9f569bc
-md"""
-+ TBD: Relabel factor levels (Boys, Girls; fitness components for Test)
-+ TBD: Relevel factors; why not levels from table; use .RDS for now?
-+ TBD: Set range (7.8 to 9.2 and tick marks (8, 8.5, 9) of axes
-+ TBD: Move legend in plot? 
-"""
+# ╔═╡ f9e37852-7116-4af6-a61d-2ea03b1ba4ac
+StatsBase.coefnames(re::MixedModels.AbstractReMat) = re.cnames
+
+# ╔═╡ 1fa2d657-5506-436a-a25a-5203c20e510a
+begin
+	mrk17 = MixedModels.dataset(:mrk17_exp1)
+	contr = Dict(:subj => Grouping(),
+				 :item => Grouping(),
+				 :F => HelmertCoding(),
+			     :P => HelmertCoding(),
+			 	 :Q => HelmertCoding(),
+				 :lQ => HelmertCoding(),
+				 :lT => HelmertCoding())
+	m6frm = @formula(1000/rt ~ 1 + F * P * Q * lQ * lT + 
+		                      (1 +     P + Q + lQ + lT| item) + 
+		                      (1 + F + P + Q + lQ +lT | subj))
+	nothing
+end
+
+# ╔═╡ 2c3990e0-0253-4c4d-99ed-69636e7cf4e7
+@bind frate PlutoUI.Slider(1:100; default=10, show_value=true)
+
+# ╔═╡ b80d463a-cb34-49f9-ab69-2abeb9b629e9
+models = Dict("sleepstudy" => LinearMixedModel(@formula(reaction ~ 1 + days + (1 + days|subj)), dataset(:sleepstudy)),
+		     "mrk17" => LinearMixedModel(m6frm, mrk17; contrasts=contr),
+			 "kb07" => LinearMixedModel(@formula(rt_trunc ~ 1+spkr*prec*load+(1+spkr+prec+load|subj)+(1+spkr+prec+load|item)), dataset(:kb07)),
+			"kb07_int" => LinearMixedModel(@formula(rt_trunc ~ 1+spkr*prec*load+(1|subj)+(1|item)), dataset(:kb07)));
+
+# ╔═╡ c259a93c-4c42-4708-8a57-6ea312aedc04
+@bind mname PlutoUI.Select(collect(keys(models)); default="sleepstudy")
+
+# ╔═╡ f0e95022-ee10-470b-9753-53d2510309ae
+m = let mdl = models[mname]
+	mdl.optsum.feval > 0 || fit!(mdl; thin=1)
+	mdl
+end
+
+# ╔═╡ 844ec630-e50e-4ccd-bb0a-265777be21bb
+@bind grp PlutoUI.Select(collect(string.(fnames(m))))
+
+# ╔═╡ c42c9c10-798c-46c9-9013-0cd9a092cd10
+path = mktempdir()
+
+# ╔═╡ 42726a44-4723-4d9f-954e-79635ea0d365
+llvid = let path = path, fig = Figure(), frate = frate, fitlog = m.optsum.fitlog
+
+	pp = Node(Point2f0[])
+    ax = Axis(fig[1, 1])
+	
+	lines!(ax, pp)
+	ax.xlabel = "Iteration"
+	ax.ylabel = "-2 Log likelihood"
+	
+	
+	record(fig, joinpath(path, "ll_animation.mp4"), enumerate(fitlog), framerate = frate) do (idx, (θ, ll))
+		push!(pp[], Point2f0(idx, ll))
+		autolimits!(ax)
+	end
+end
+
+# ╔═╡ 7a69147b-0b13-4339-9d53-9748ed506c03
+LocalResource(llvid)
+
+# ╔═╡ d5df3d20-dbf5-4d12-a87e-9a2d7e3f78d0
+bouncyθvid = let path = path, fig = Figure(), frate = 5, fitlog = m.optsum.fitlog, m = m
+	
+	supertitle = Node("-2 log likelihood: ")
+	l1 = Label(fig[1, 1], supertitle, textsize = 15)
+	l1.tellwidth = false
+	itertitle = Node("iter:")
+	l2 = Label(fig[1, 2], itertitle, textsize = 15)
+	l2.tellwidth = false
+	titlelayout = GridLayout()
+	fig[1, 1:2] = titlelayout
+	
+	axpar = Axis(fig[2, :])
+	axpar.tellwidth = true
+	θs = Node(copy(m.optsum.initial))
+	xs = 1:length(θs[])
+	iter = Node(1.0)
+	maxiter = length(fitlog)
+	idx = 1
+	color = lift(iter) do iter
+		(:black, 0.75 ^ (iter - idx))
+	end
+	scatter!(axpar, xs, θs; color)
+	lines!(axpar, xs, θs; color)
+	autolimits!(axpar)
+	
+	θnames = sizehint!(String[], sum(nθ, m.reterms))
+	for (g, gname) in enumerate(fnames(m))
+		cnms = coefnames(m.reterms[g])
+		for i in 1:length(cnms), j in 1:i
+			if i == j
+				push!(θnames, string("σ_", gname, "_", cnms[i]))
+			else
+				push!(θnames, string("ρ_", gname, "_", cnms[j], "_", cnms[i]))
+			end		
+		end
+	end
+ 	axpar.xticks[] = (xs, θnames)
+	axpar.xticklabelrotation[] = pi/4
+	axpar.xlabel = "θ components"
+	axpar.ylabel = "θ values"
+	
+	vid = record(fig, joinpath(path, "bouncy_theta_animation.mp4"), enumerate(fitlog), framerate = frate) do (idx, (θ, ll))
+		iter[] = idx
+		color = lift(iter) do iter
+			(:black, 0.75 ^ (iter - idx))
+		end
+		scatter!(axpar, xs, θ; color)
+		lines!(axpar, xs, θ; color)
+		supertitle[] = "-2 log likelihood: $(round(Int,ll))"
+		itertitle[] = "iter: $(idx)"
+		autolimits!(axpar)
+	end
+	vid
+end
+
+# ╔═╡ b265d9ec-ad73-4a8d-aeba-b765b2ea9bcd
+LocalResource(bouncyθvid)
+
+# ╔═╡ fc29e293-8eab-4f3b-99c3-4ae11389f881
+θvid = let path = path, fig = Figure(), frate = frate, fitlog = m.optsum.fitlog
+	
+	ppll = Node(Point2f0[])
+    axll = Axis(fig[1, 1])
+	lines!(axll, ppll)
+	axll.ylabel = "-2 log likelihood"
+	hidexdecorations!(axll)
+	
+	ppθ = Node(zeros(Float32, length(m.θ), 0))
+	isvar = Int.(m.θ .!= 0)
+	grps = mapreduce(vcat, enumerate(m.reterms)) do (idx, re)
+		idx * ones(Int, MixedModels.nθ(re))
+	end
+	cols = cgrad(:Dark2_8; categorical=unique(grps), alpha=0.6)[grps]
+	labs = string.(MixedModels.fname.(m.reterms[grps]))
+	
+	axθ = Axis(fig[2, 1])
+	s = series!(axθ, ppθ; solid_color=cols, labels=labs)
+	axislegend(axθ; unique=true)
+	axθ.xlabel = "Iteration"
+	axθ.ylabel = "θ"
+	linkxaxes!(axll, axθ)
+	
+	vid = record(fig, joinpath(path, "fit_animation.mp4"), enumerate(fitlog), framerate = frate) do (idx, (θ, ll))
+		push!(ppll[], Point2f0(idx, ll))
+		ppθ[] = hcat(ppθ[], reshape(θ, :, 1))
+		autolimits!(axθ)
+		autolimits!(axll)
+	end
+	vid
+end
+
+# ╔═╡ d706802d-7df1-41cf-81f0-8856718ea10a
+LocalResource(θvid)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
-Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
+NLopt = "76087f3c-5699-56af-9a33-bf431cd00edd"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
-AlgebraOfGraphics = "~0.5.3"
-Arrow = "~1.6.2"
-CairoMakie = "~0.6.5"
+CairoMakie = "~0.6.2"
 DataFrames = "~1.2.2"
+MixedModels = "^4.1.0"
+NLopt = "~0.6.0"
+PlutoUI = "~0.7.4"
+ProgressMeter = "~1.7.1"
+StatsBase = "~0.33.9"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -125,12 +229,6 @@ deps = ["LinearAlgebra"]
 git-tree-sha1 = "84918055d15b3114ede17ac6a7182f68870c16f7"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 version = "3.3.1"
-
-[[AlgebraOfGraphics]]
-deps = ["Colors", "Dates", "FileIO", "GLM", "GeoInterface", "GeometryBasics", "GridLayoutBase", "KernelDensity", "Loess", "Makie", "PlotUtils", "PooledArrays", "RelocatableFolders", "StatsBase", "StructArrays", "Tables"]
-git-tree-sha1 = "40446e661ffe7a33c31980ec6438181daa41deff"
-uuid = "cbdf2221-f076-402e-a563-3d30da359d67"
-version = "0.5.3"
 
 [[Animations]]
 deps = ["Colors"]
@@ -177,6 +275,12 @@ version = "1.0.0"
 [[Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
+[[BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Statistics", "UUIDs"]
+git-tree-sha1 = "42ac5e523869a84eac9669eaceed9e4aa0e1587b"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.1.4"
+
 [[BitIntegers]]
 deps = ["Random"]
 git-tree-sha1 = "f50b5a99aa6ff9db7bf51255b5c21c8bc871ad54"
@@ -218,11 +322,23 @@ git-tree-sha1 = "bdc0937269321858ab2a4f288486cb258b9a0af7"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 version = "1.3.0"
 
+[[CodecBzip2]]
+deps = ["Bzip2_jll", "Libdl", "TranscodingStreams"]
+git-tree-sha1 = "2e62a725210ce3c3c2e1a3080190e7ca491f18d7"
+uuid = "523fee87-0ab8-5b00-afb7-3ecf72e48cfd"
+version = "0.7.2"
+
 [[CodecLz4]]
 deps = ["Lz4_jll", "TranscodingStreams"]
 git-tree-sha1 = "59fe0cb37784288d6b9f1baebddbf75457395d40"
 uuid = "5ba52731-8f18-5e0d-9241-30f10d1ec561"
 version = "0.4.0"
+
+[[CodecZlib]]
+deps = ["TranscodingStreams", "Zlib_jll"]
+git-tree-sha1 = "ded953804d019afa9a3f98981d99b33e3db7b6da"
+uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
+version = "0.7.0"
 
 [[CodecZstd]]
 deps = ["TranscodingStreams", "Zstd_jll"]
@@ -310,12 +426,6 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 [[DelimitedFiles]]
 deps = ["Mmap"]
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
-
-[[Distances]]
-deps = ["LinearAlgebra", "Statistics", "StatsAPI"]
-git-tree-sha1 = "abe4ad222b26af3337262b8afb28fab8d215e9f8"
-uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
-version = "0.10.3"
 
 [[Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -448,12 +558,6 @@ git-tree-sha1 = "f564ce4af5e79bb88ff1f4488e64363487674278"
 uuid = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
 version = "1.5.1"
 
-[[GeoInterface]]
-deps = ["RecipesBase"]
-git-tree-sha1 = "38a649e6a52d1bea9844b382343630ac754c931c"
-uuid = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
-version = "0.5.5"
-
 [[GeometryBasics]]
 deps = ["EarCut_jll", "IterTools", "LinearAlgebra", "StaticArrays", "StructArrays", "Tables"]
 git-tree-sha1 = "58bcdf5ebc057b085e58d95c138725628dd7453c"
@@ -495,6 +599,12 @@ git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
 
+[[HTTP]]
+deps = ["Base64", "Dates", "IniFile", "Logging", "MbedTLS", "NetworkOptions", "Sockets", "URIs"]
+git-tree-sha1 = "60ed5f1643927479f845b0135bb369b031b541fa"
+uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+version = "0.9.14"
+
 [[HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
 git-tree-sha1 = "8a954fed8ac097d5be04921d595f741115c1b2ad"
@@ -533,6 +643,12 @@ version = "0.5.1"
 git-tree-sha1 = "f5fc07d4e706b84f72d54eedcc1c13d92fb0871c"
 uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
 version = "0.1.2"
+
+[[IniFile]]
+deps = ["Test"]
+git-tree-sha1 = "098e4d2c533924c921f9f9847274f2ad89e018b8"
+uuid = "83e8ac13-25f8-5344-8a64-a9f2b223428f"
+version = "0.5.0"
 
 [[IntelOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -594,6 +710,18 @@ deps = ["Dates", "Mmap", "Parsers", "Unicode"]
 git-tree-sha1 = "8076680b162ada2a031f707ac7b4953e30667a37"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 version = "0.21.2"
+
+[[JSON3]]
+deps = ["Dates", "Mmap", "Parsers", "StructTypes", "UUIDs"]
+git-tree-sha1 = "b3e5984da3c6c95bcf6931760387ff2e64f508f3"
+uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+version = "1.9.1"
+
+[[JSONSchema]]
+deps = ["HTTP", "JSON", "ZipFile"]
+git-tree-sha1 = "b84ab8139afde82c7c65ba2b792fe12e01dd7307"
+uuid = "7d188eb4-7ad8-530c-ae41-71a32a6d4692"
+version = "0.3.3"
 
 [[KernelDensity]]
 deps = ["Distributions", "DocStringExtensions", "FFTW", "Interpolations", "StatsBase"]
@@ -681,12 +809,6 @@ version = "2.36.0+0"
 deps = ["Libdl"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
-[[Loess]]
-deps = ["Distances", "LinearAlgebra", "Statistics"]
-git-tree-sha1 = "b5254a86cf65944c68ed938e575f5c81d5dfe4cb"
-uuid = "4345ca2d-374a-55d4-8d30-97f9976e7612"
-version = "0.5.3"
-
 [[LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
 git-tree-sha1 = "3d682c07e6dd250ed082f883dc88aee7996bf2cc"
@@ -734,11 +856,29 @@ git-tree-sha1 = "5cf525d97caf86d29307150fcba763a64eaa9cbe"
 uuid = "7eb4fadd-790c-5f42-8a69-bfa0b872bfbf"
 version = "1.1.0"
 
+[[MathOptInterface]]
+deps = ["BenchmarkTools", "CodecBzip2", "CodecZlib", "JSON", "JSONSchema", "LinearAlgebra", "MutableArithmetics", "OrderedCollections", "SparseArrays", "Test", "Unicode"]
+git-tree-sha1 = "575644e3c05b258250bb599e57cf73bbf1062901"
+uuid = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
+version = "0.9.22"
+
+[[MathProgBase]]
+deps = ["LinearAlgebra", "SparseArrays"]
+git-tree-sha1 = "9abbe463a1e9fc507f12a69e7f29346c2cdc472c"
+uuid = "fdba3010-5040-5b88-9595-932c9decdf73"
+version = "0.7.8"
+
 [[MathTeXEngine]]
 deps = ["AbstractTrees", "Automa", "DataStructures", "FreeTypeAbstraction", "GeometryBasics", "LaTeXStrings", "REPL", "RelocatableFolders", "Test"]
 git-tree-sha1 = "f5c8789464aed7058107463e5cef53e6ad3f1f3e"
 uuid = "0a4f8689-d25c-4efe-a92b-7142dfc1aa53"
 version = "0.2.0"
+
+[[MbedTLS]]
+deps = ["Dates", "MbedTLS_jll", "Random", "Sockets"]
+git-tree-sha1 = "1c38e51c3d08ef2278062ebceade0e46cefc96fe"
+uuid = "739be429-bea8-5141-9913-cc70e7f3736d"
+version = "1.0.3"
 
 [[MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -749,6 +889,12 @@ deps = ["DataAPI"]
 git-tree-sha1 = "2ca267b08821e86c5ef4376cffed98a46c2cb205"
 uuid = "e1d29d7a-bbdc-5cf2-9ac0-f12de2c33e28"
 version = "1.0.1"
+
+[[MixedModels]]
+deps = ["Arrow", "DataAPI", "Distributions", "GLM", "JSON3", "LazyArtifacts", "LinearAlgebra", "Markdown", "NLopt", "PooledArrays", "ProgressMeter", "Random", "SparseArrays", "StaticArrays", "Statistics", "StatsBase", "StatsFuns", "StatsModels", "StructTypes", "Tables"]
+git-tree-sha1 = "f318e42a48ec0a856292bafeec6b07aed3f6d600"
+uuid = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
+version = "4.1.1"
 
 [[Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
@@ -767,6 +913,24 @@ version = "0.3.3"
 
 [[MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+
+[[MutableArithmetics]]
+deps = ["LinearAlgebra", "SparseArrays", "Test"]
+git-tree-sha1 = "3927848ccebcc165952dc0d9ac9aa274a87bfe01"
+uuid = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
+version = "0.2.20"
+
+[[NLopt]]
+deps = ["MathOptInterface", "MathProgBase", "NLopt_jll"]
+git-tree-sha1 = "d80cb3327d1aeef0f59eacf225e000f86e4eee0a"
+uuid = "76087f3c-5699-56af-9a33-bf431cd00edd"
+version = "0.6.3"
+
+[[NLopt_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "2b597c46900f5f811bec31f0dcc88b45744a2a09"
+uuid = "079eb43e-fd8e-5478-9966-2cf3e3edb778"
+version = "2.7.0+0"
 
 [[NaNMath]]
 git-tree-sha1 = "bfe47e760d60b82b66b61d2d44128b62e3a369fb"
@@ -897,6 +1061,12 @@ deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "Stat
 git-tree-sha1 = "9ff1c70190c1c30aebca35dc489f7411b256cd23"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
 version = "1.0.13"
+
+[[PlutoUI]]
+deps = ["Base64", "Dates", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "Suppressor"]
+git-tree-sha1 = "44e225d5837e2a2345e69a1d1e01ac2443ff9fcb"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.9"
 
 [[PolygonOps]]
 git-tree-sha1 = "c031d2332c9a8e1c90eca239385815dc271abb22"
@@ -1105,9 +1275,20 @@ git-tree-sha1 = "1700b86ad59348c0f9f68ddc95117071f947072d"
 uuid = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 version = "0.6.1"
 
+[[StructTypes]]
+deps = ["Dates", "UUIDs"]
+git-tree-sha1 = "8445bf99a36d703a09c601f9a57e2f83000ef2ae"
+uuid = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
+version = "1.7.3"
+
 [[SuiteSparse]]
 deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
 uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
+
+[[Suppressor]]
+git-tree-sha1 = "a819d77f31f83e5792a76081eee1ea6342ab8787"
+uuid = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
+version = "0.2.0"
 
 [[TOML]]
 deps = ["Dates"]
@@ -1156,6 +1337,11 @@ deps = ["Random", "Test"]
 git-tree-sha1 = "216b95ea110b5972db65aa90f88d8d89dcb8851c"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.9.6"
+
+[[URIs]]
+git-tree-sha1 = "97bbe755a53fe859669cd907f2d96aee8d2c1355"
+uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
+version = "1.3.0"
 
 [[UUIDs]]
 deps = ["Random", "SHA"]
@@ -1236,6 +1422,12 @@ git-tree-sha1 = "79c31e7844f6ecf779705fbc12146eb190b7d845"
 uuid = "c5fb5394-a638-5e4d-96e5-b29de1b5cf10"
 version = "1.4.0+3"
 
+[[ZipFile]]
+deps = ["Libdl", "Printf", "Zlib_jll"]
+git-tree-sha1 = "c3a5637e27e914a7a445b8d0ad063d701931e9f7"
+uuid = "a5390f91-8eb1-5f08-bee0-b1d1ffed6cea"
+version = "0.9.3"
+
 [[Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
@@ -1298,16 +1490,20 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╟─45e5fcb6-be53-4c03-8415-173578219d06
-# ╠═8b38927e-11f1-45fd-b630-44113f0aac3d
-# ╠═a8bc0d0e-fc13-4196-95c9-5922ed400cb4
-# ╠═4825ea74-1902-4423-883d-a7b00a2aa359
-# ╟─52b65f0d-f09e-47c8-81b5-624a09bc1c9a
-# ╠═53da799e-f794-42a5-9255-6503fde6dfa0
-# ╟─fa5e6e67-d37b-414d-8f3a-34f623f423af
-# ╠═f27eab8e-5fbd-442c-b4a2-a95b4c29cd52
-# ╟─e61f86b4-2e9e-4522-af2f-b97097e4c95c
-# ╠═27dbedac-3270-4c4b-ba42-3a99c6c54cba
-# ╟─d81256c0-fa19-4926-b723-795cc9f569bc
+# ╠═3c7a1a36-fa48-11eb-00d9-9f2255af9992
+# ╠═f9e37852-7116-4af6-a61d-2ea03b1ba4ac
+# ╠═1fa2d657-5506-436a-a25a-5203c20e510a
+# ╠═2c3990e0-0253-4c4d-99ed-69636e7cf4e7
+# ╠═b80d463a-cb34-49f9-ab69-2abeb9b629e9
+# ╠═c259a93c-4c42-4708-8a57-6ea312aedc04
+# ╠═f0e95022-ee10-470b-9753-53d2510309ae
+# ╟─844ec630-e50e-4ccd-bb0a-265777be21bb
+# ╠═c42c9c10-798c-46c9-9013-0cd9a092cd10
+# ╠═42726a44-4723-4d9f-954e-79635ea0d365
+# ╠═7a69147b-0b13-4339-9d53-9748ed506c03
+# ╟─d5df3d20-dbf5-4d12-a87e-9a2d7e3f78d0
+# ╠═b265d9ec-ad73-4a8d-aeba-b765b2ea9bcd
+# ╟─fc29e293-8eab-4f3b-99c3-4ae11389f881
+# ╠═d706802d-7df1-41cf-81f0-8856718ea10a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
