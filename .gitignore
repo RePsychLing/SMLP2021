@@ -23,7 +23,3 @@ docs/site/
 # environment.
 Manifest.toml
 
-# used for generating a static website
-pluto_state_cache/
-notebooks/*.html
-index.html
