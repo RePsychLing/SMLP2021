@@ -106,6 +106,10 @@ md"""
 
 Throughtout this course, we have used the Makie ecosystem for plotting, but there are several alternatives in Julia.
 
+### Makie
+
+The [Makie ecosystem](https://makie.juliaplots.org/stable/) is a relatively new take on graphics that aims to be both powerful and easy to use. Makie.jl itself only provides abstract definitions for many components (and is used in e.g. MixedModelsMakie.jl to define plot types for MixedModels.jl). The actual plotting and rendering is handled by a backend package such as CairoMakie.jl (good for Pluto notebooks or rending static 2D images) and GLMakie.jl (good for dynamic, interactive visuals and 3D images). AlgebraOfGraphics.jl builds a grammar of graphics upon the Makie framework. It's a great way to get good plots very quickly, but extensive customization is still best achieved by using Makie directly.
+
 ### Plots.jl
 
 [Plots.jl](https://docs.juliaplots.org/latest/) is the original plotting package in Julia, but we often find it difficult to work with compared to some of the other alternatives. [StatsPlots.jl](https://github.com/JuliaPlots/StatsPlots.jl) builds on this, adding common statistical plots, while [UnicodePlots.jl](https://github.com/Evizero/UnicodePlots.jl) renders plots as Unicode characters directly in the REPL.
@@ -114,11 +118,7 @@ Throughtout this course, we have used the Makie ecosystem for plotting, but ther
 
 ### Gadfly
 
-[Gadfly.jl](https://gadflyjl.org/stable/) was the original attempt to create a plotting system in Julia based on the grammar of graphics (the "gg" in `ggplot2`). Development has largely stalled, but some functionality still exceeds `AlgebraOfGraphics.jl`, which has taken up the grammar of graphics mantle. Notably, the MixedModels.jl documentation still uses Gadfly as of this writing (early September 2021).
-
-### Makie
-
-The [Makie ecosystem](https://makie.juliaplots.org/stable/) is a relatively new take on graphics that aims to be both powerful and easy to use. Makie.jl itself only provides abstract definitions for many components (and is used in e.g. MixedModelsMakie.jl to define plot types for MixedModels.jl). The actual plotting and rendering is handled by a backend package such as CairoMakie.jl (good for Pluto notebooks or rending static 2D images) and GLMakie.jl (good for dynamic, interactive visuals and 3D images). AlgebraOfGraphics.jl builds a grammar of graphics upon the Makie framework. It's a great way to get good plots very quickly, but extensive customization is still best achieved by using Makie directly.
+[Gadfly.jl](https://gadflyjl.org/stable/) was the original attempt to create a plotting system in Julia based on the grammar of graphics (the "gg" in `ggplot2`). Development has largely stalled, but some functionality still exceeds AlgebraOfGraphics.jl, which has taken up the grammar of graphics mantle. Notably, the MixedModels.jl documentation still uses Gadfly as of this writing (early September 2021).
 
 ### Others
 
@@ -242,7 +242,7 @@ uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
 # ╔═╡ Cell order:
 # ╟─27130015-4f45-4ebd-9094-07ec00261e5f
-# ╠═cd73a70f-4ce0-4ef8-87be-d3b319066602
+# ╟─cd73a70f-4ce0-4ef8-87be-d3b319066602
 # ╟─9143e623-5457-48b5-9304-ce2a757b18b5
 # ╟─32c08c8a-68ec-4bcb-bd4b-3fd76ffca0f0
 # ╟─4df36c00-be80-4fa5-83ca-c9648352fc42
