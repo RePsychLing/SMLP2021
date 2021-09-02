@@ -37,7 +37,7 @@ md"""
 
 Note that by default both Arrow.jl and CSV.jl do not return a DataFrame, but rather "column tables" -- named tuples of column vectors.
 
-## DataFrames
+### DataFrames
 
 Unlike in R, DataFrames are not part of the base language, nor the standard library. 
 
@@ -132,7 +132,7 @@ md"""
 Using Julia doesn't mean you have to leave all the packages you knew in other languages behind. In Julia, it's often possible to even easily and quickly invoke code from other languages *from within Julia*. 
 
 
-[RCall.jl](https://juliainterop.github.io/RCall.jl/stable/gettingstarted/) provides a very convenient interface for interacting with R. [JellyMe4.jl](https://github.com/palday/JellyMe4.jl/) add support for moving MixedModels.jl and `lme4` models back and forth between the languages (which means that you can use `emmeans`, `sjtools, `DHARMa`, `car`, etc. to examine MixedModels.jl models!). [RData.jl](https://github.com/JuliaData/RData.jl) provides support for reading `.rds` and `.rda` files from Julia, while [RDatasets.jl](https://github.com/JuliaStats/RDatasets.jl) provides convenient access to many of the standard datasets provided by R and various R packages.
+[RCall.jl](https://juliainterop.github.io/RCall.jl/stable/gettingstarted/) provides a very convenient interface for interacting with R. [JellyMe4.jl](https://github.com/palday/JellyMe4.jl/) add support for moving MixedModels.jl and `lme4` models back and forth between the languages (which means that you can use `emmeans`, `sjtools`, `DHARMa`, `car`, etc. to examine MixedModels.jl models!). [RData.jl](https://github.com/JuliaData/RData.jl) provides support for reading `.rds` and `.rda` files from Julia, while [RDatasets.jl](https://github.com/JuliaStats/RDatasets.jl) provides convenient access to many of the standard datasets provided by R and various R packages.
 
 [PyCall.jl](https://github.com/JuliaPy/PyCall.jl/) provides a very convenient way for interacting with Python code and packages. [PyPlot.jl](https://github.com/JuliaPy/PyPlot.jl) builds upon this foundation to provide support for Python's `matplotlib`. Similarly, [PyMNE.jl](
 https://github.com/beacon-biosignals/PyMNE.jl) and [PyFOOOF.jl](https://github.com/beacon-biosignals/pyfooof.jl) provide some additional functionality to make interacting with MNE-Python and FOOOF from within Julia even easier than with vanilla PyCall. 
