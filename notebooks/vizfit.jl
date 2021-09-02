@@ -50,7 +50,7 @@ begin
 end
 
 # ╔═╡ 2c3990e0-0253-4c4d-99ed-69636e7cf4e7
-@bind frate PlutoUI.Slider(1:100; default=10, show_value=true)
+md"""Frame rate: $(@bind frate PlutoUI.Slider(1:100; default=10, show_value=true))"""
 
 # ╔═╡ b80d463a-cb34-49f9-ab69-2abeb9b629e9
 models = Dict("sleepstudy" => LinearMixedModel(@formula(reaction ~ 1 + days + (1 + days|subj)), dataset(:sleepstudy)),
@@ -59,7 +59,7 @@ models = Dict("sleepstudy" => LinearMixedModel(@formula(reaction ~ 1 + days + (1
 			"kb07_int" => LinearMixedModel(@formula(rt_trunc ~ 1+spkr*prec*load+(1|subj)+(1|item)), dataset(:kb07)));
 
 # ╔═╡ c259a93c-4c42-4708-8a57-6ea312aedc04
-@bind mname PlutoUI.Select(collect(keys(models)); default="sleepstudy")
+md"""Model: $(@bind mname PlutoUI.Select(collect(keys(models)); default="sleepstudy"))"""
 
 # ╔═╡ f0e95022-ee10-470b-9753-53d2510309ae
 m = let mdl = models[mname]
@@ -67,34 +67,14 @@ m = let mdl = models[mname]
 	mdl
 end
 
-# ╔═╡ 844ec630-e50e-4ccd-bb0a-265777be21bb
-@bind grp PlutoUI.Select(collect(string.(fnames(m))))
+# ╔═╡ 26bb0678-fe1b-4f5c-a92c-5b79d2ec113c
+VarCorr(m)
 
 # ╔═╡ c42c9c10-798c-46c9-9013-0cd9a092cd10
-path = mktempdir()
-
-# ╔═╡ 42726a44-4723-4d9f-954e-79635ea0d365
-llvid = let path = path, fig = Figure(), frate = frate, fitlog = m.optsum.fitlog
-
-	pp = Node(Point2f0[])
-    ax = Axis(fig[1, 1])
-	
-	lines!(ax, pp)
-	ax.xlabel = "Iteration"
-	ax.ylabel = "-2 Log likelihood"
-	
-	
-	record(fig, joinpath(path, "ll_animation.mp4"), enumerate(fitlog), framerate = frate) do (idx, (θ, ll))
-		push!(pp[], Point2f0(idx, ll))
-		autolimits!(ax)
-	end
-end
-
-# ╔═╡ 7a69147b-0b13-4339-9d53-9748ed506c03
-LocalResource(llvid)
+path = mktempdir();
 
 # ╔═╡ d5df3d20-dbf5-4d12-a87e-9a2d7e3f78d0
-bouncyθvid = let path = path, fig = Figure(), frate = 5, fitlog = m.optsum.fitlog, m = m
+bouncyθvid = let fig = Figure(), fitlog = m.optsum.fitlog
 	
 	supertitle = Node("-2 log likelihood: ")
 	l1 = Label(fig[1, 1], supertitle, textsize = 15)
@@ -147,13 +127,13 @@ bouncyθvid = let path = path, fig = Figure(), frate = 5, fitlog = m.optsum.fitl
 		autolimits!(axpar)
 	end
 	vid
-end
+end;
 
 # ╔═╡ b265d9ec-ad73-4a8d-aeba-b765b2ea9bcd
 LocalResource(bouncyθvid)
 
 # ╔═╡ fc29e293-8eab-4f3b-99c3-4ae11389f881
-θvid = let path = path, fig = Figure(), frate = frate, fitlog = m.optsum.fitlog
+θvid = let fig = Figure(), fitlog = m.optsum.fitlog
 	
 	ppll = Node(Point2f0[])
     axll = Axis(fig[1, 1])
@@ -172,7 +152,7 @@ LocalResource(bouncyθvid)
 	axθ = Axis(fig[2, 1])
 	s = series!(axθ, ppθ; solid_color=cols, labels=labs)
 	axislegend(axθ; unique=true)
-	axθ.xlabel = "Iteration"
+	axθ.xlabel = "iteration"
 	axθ.ylabel = "θ"
 	linkxaxes!(axll, axθ)
 	
@@ -183,7 +163,7 @@ LocalResource(bouncyθvid)
 		autolimits!(axll)
 	end
 	vid
-end
+end;
 
 # ╔═╡ d706802d-7df1-41cf-81f0-8856718ea10a
 LocalResource(θvid)
@@ -1490,20 +1470,18 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═3c7a1a36-fa48-11eb-00d9-9f2255af9992
-# ╠═f9e37852-7116-4af6-a61d-2ea03b1ba4ac
-# ╠═1fa2d657-5506-436a-a25a-5203c20e510a
-# ╠═2c3990e0-0253-4c4d-99ed-69636e7cf4e7
-# ╠═b80d463a-cb34-49f9-ab69-2abeb9b629e9
-# ╠═c259a93c-4c42-4708-8a57-6ea312aedc04
-# ╠═f0e95022-ee10-470b-9753-53d2510309ae
-# ╟─844ec630-e50e-4ccd-bb0a-265777be21bb
-# ╠═c42c9c10-798c-46c9-9013-0cd9a092cd10
-# ╠═42726a44-4723-4d9f-954e-79635ea0d365
-# ╠═7a69147b-0b13-4339-9d53-9748ed506c03
+# ╟─3c7a1a36-fa48-11eb-00d9-9f2255af9992
+# ╟─f9e37852-7116-4af6-a61d-2ea03b1ba4ac
+# ╟─1fa2d657-5506-436a-a25a-5203c20e510a
+# ╟─2c3990e0-0253-4c4d-99ed-69636e7cf4e7
+# ╟─b80d463a-cb34-49f9-ab69-2abeb9b629e9
+# ╟─c259a93c-4c42-4708-8a57-6ea312aedc04
+# ╟─f0e95022-ee10-470b-9753-53d2510309ae
+# ╟─26bb0678-fe1b-4f5c-a92c-5b79d2ec113c
+# ╟─c42c9c10-798c-46c9-9013-0cd9a092cd10
+# ╟─d706802d-7df1-41cf-81f0-8856718ea10a
 # ╟─d5df3d20-dbf5-4d12-a87e-9a2d7e3f78d0
-# ╠═b265d9ec-ad73-4a8d-aeba-b765b2ea9bcd
+# ╟─b265d9ec-ad73-4a8d-aeba-b765b2ea9bcd
 # ╟─fc29e293-8eab-4f3b-99c3-4ae11389f881
-# ╠═d706802d-7df1-41cf-81f0-8856718ea10a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
