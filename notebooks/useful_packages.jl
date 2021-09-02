@@ -31,7 +31,7 @@ md"""
 
 ### Reading data
 
-- [Arrow.jl](https://arrow.juliadata.org/dev/manual/) a high performance format for data storage, accessible in R via the `feather` package and in Python via `pyarrow`. This is the format that we store the example and test datasets in for MixedModels.jl.
+- [Arrow.jl](https://arrow.juliadata.org/dev/manual/) a high performance format for data storage, accessible in R via the [`arrow` package](https://arrow.apache.org/docs/r/) and in Python via `pyarrow`. (Confusingly, the function for reading and writing Arrow format files in R is called `read_feather` and `write_feather`, but the modern Arrow format is distinct from the older Feather format provided by the `feather` package.) This is the format that we store the example and test datasets in for MixedModels.jl.
 
 - [CSV.jl](https://csv.juliadata.org/stable/index.html) useful for reading comma-separated values, tab-separated values and basically everything handled by the `read.csv` and `read.table` family of functions in R. 
 
