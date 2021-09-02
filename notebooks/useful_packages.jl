@@ -43,8 +43,7 @@ Unlike in R, DataFrames are not part of the base language, nor the standard libr
 
 [DataFrames.jl](https://dataframes.juliadata.org/stable/) provides the basic infrastructure around DataFrames, as well as its own [mini language](https://bkamins.github.io/julialang/2020/12/24/minilanguage.html) for doing the split-apply-combine approach that underlies R's `dplyr` and much of the tidyverse.  The DataFrames.jl documentation is the place to for looking at how to e.g. read in a [CSV or Arrow file as a DataFrame](https://dataframes.juliadata.org/stable/man/importing_and_exporting/). Note that DataFrames.jl by default depends on [CategoricalArrays.jl](https://categoricalarrays.juliadata.org/stable/) to handle the equivalent of `factor` in the R world, but there is an alternative package for `factor`-like array type in Julia, [PooledArrays.jl](https://github.com/JuliaData/PooledArrays.jl/). PooledArrays are simpler, but more limited than CategoricalArrays and we (Phillip and Doug) sometimes use them in our examples and simulations.
 
-DataFrame.jl's mini language can be a bit daunting, if you're used to manipulations in the style of base R or the tidyverse. For that, there are several options; recently, we'e had particularly nice experiences with [DataFrameMacros.jl](https://github.com/jkrumbiegel/DataFrameMacros.jl) and [Chain.jl](https://github.com/jkrumbiegel/Chain.jl) for a convenient syntax to connect or "pipe" together successive operations. In the past, we've also used 
-[DataFramesMeta.jl](https://juliadata.github.io/DataFramesMeta.jl/stable/). It's your choice whether and which of these add-ons you want to use! Phillip tends to write his code using raw DataFrames.jl, but Doug really enjoys DataFrameMacros.jl. 
+DataFrame.jl's mini language can be a bit daunting, if you're used to manipulations in the style of base R or the tidyverse. For that, there are several options; recently, we'e had particularly nice experiences with [DataFrameMacros.jl](https://github.com/jkrumbiegel/DataFrameMacros.jl) and [Chain.jl](https://github.com/jkrumbiegel/Chain.jl) for a convenient syntax to connect or "pipe" together successive operations. It's your choice whether and which of these add-ons you want to use! Phillip tends to write his code using raw DataFrames.jl, but Doug really enjoys DataFrameMacros.jl. 
 """
 
 # ╔═╡ 9143e623-5457-48b5-9304-ce2a757b18b5
@@ -243,7 +242,7 @@ uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
 # ╔═╡ Cell order:
 # ╟─27130015-4f45-4ebd-9094-07ec00261e5f
-# ╟─cd73a70f-4ce0-4ef8-87be-d3b319066602
+# ╠═cd73a70f-4ce0-4ef8-87be-d3b319066602
 # ╟─9143e623-5457-48b5-9304-ce2a757b18b5
 # ╟─32c08c8a-68ec-4bcb-bd4b-3fd76ffca0f0
 # ╟─4df36c00-be80-4fa5-83ca-c9648352fc42
