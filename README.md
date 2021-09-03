@@ -6,7 +6,7 @@ Notebooks for "Advanced methods in frequentist statistics with Julia" as part of
 | Name            | GitHub                                   |
 |-----------------|------------------------------------------|
 | Phillip Alday   | [@palday](https://github.com/palday)     |
-| Douglas Bates   | [@dmates](https://github.com/dmbates)    |
+| Douglas Bates   | [@dmbates](https://github.com/dmbates)    |
 | Lisa DeBruine   | [@debruine](https://github.com/debruine) |
 | Reinhold Kliegl | [@kliegl](https://github.com/kliegl)     |
 
