@@ -27,10 +27,7 @@ end
 md"""
 # Mixed Models Tutorial: Basics
 
-Ths script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). 
-Physical fitness in third grade of primary school: 
-A mixed model analysis of 108,295 children and 515 schools.
-
+Ths script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). Age and sex effects in physical fitness components of 108,295 third graders including 515 primary schools and 9 cohorts. [Scientific Reports 11:17566](https://rdcu.be/cwSeR)
 To circumvent delays associated with model fitting we work with models that are less complex than those in the reference publication. All the data to reproduce the models in the publication are used here, too; the script requires only a few changes to specify the more complex models in the paper. 
 
 The script is structured in three main sections: 
@@ -186,8 +183,6 @@ are binned observed child means; lines are simple regression fits to the observa
 # ╔═╡ 1ef832af-6226-45ac-97ee-2cbd5b67600a
 md"""
 #### 1.3.4 To be done
-+ Use labels of components, not of tests
-+ Reverse order of levels for sex
 + Move legend into plot; drop legend title
 + Add means of binned age groups from df
 """
