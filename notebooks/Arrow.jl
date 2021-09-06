@@ -13,6 +13,7 @@ begin
 	using DataFrameMacros
 	using DataFrames
 	using Downloads
+	using KernelDensity
 	using PyCall  # show reading Arrow in Python
 	using RCall   # show reading Arrow in R
 	using StatsBase
@@ -197,7 +198,71 @@ What about the distribution of ages?
 
 # ╔═╡ 5d4034f3-5066-4a61-9ea2-aef719f9058e
 # ridge plot or faceting here please
-data(parent(gdf)) * mapping(:age => "Age [yr]", :n) |> draw
+data(parent(gdf)) * mapping(:age => "Age [yr]", col=:n) * density()  |> draw
+
+# ╔═╡ d9a2a765-c10c-430d-9387-e57aee903860
+"""
+	ridgeplot!(ax::Axis, df::AbstractDataFrame, densvar::Symbol, group::Symbol; normalize=false)
+	ridgeplot!(f::Figure, args...; pos=(1,1) kwargs...)
+	ridgeplot(args...; kwargs...)
+
+Create a "ridge plot".
+
+A ridge plot is stacked plot of densities for a given variable (`densvar`) grouped by a different variable (`group`). Because densities can very widely in scale, it is sometimes useful to `normalize` the densities so that each density has a maximum of 1.
+
+The non-mutating method creates a Figure before calling the method for Figure.
+The method for Figure places the ridge plot in the grid position specified by `pos`, default is (1,1).
+"""
+function ridgeplot!(ax::Axis, df::AbstractDataFrame, densvar::Symbol, group::Symbol; normalize=false)
+	# `normalize` makes it so that the max density is always 1
+	# `normalize` works on the density not the area/mass
+	gdf = groupby(df, group)
+	dens = combine(gdf, densvar => kde => :kde)
+	sort!(dens, group)
+	spacing = normalize ? 1.0 :  0.9 * maximum(dens[!, :kde]) do val
+		return maximum(val.density)
+	end
+	
+	nticks = length(gdf)
+	
+	for (idx, row) in enumerate(eachrow(dens))
+		dd = normalize ? row.kde.density ./ maximum(row.kde.density) : row.kde.density
+		
+		offset =  idx * spacing
+		
+		lower = Node(Point2f.(row.kde.x, offset))
+		upper = Node(Point2f.(row.kde.x, dd .+ offset))
+		band!(ax, lower, upper; color=(:black, 0.3))
+		lines!(ax, upper; color=(:black, 1.0))
+	end
+	
+    ax.yticks[] = (1:spacing:(nticks*spacing), string.(dens[!, group]))
+    ylims!(ax, 0, (nticks + 2) * spacing)
+	ax.xlabel[] = string(densvar)
+	ax.ylabel[] = string(group)
+	
+	ax
+end
+
+# ╔═╡ 557e91e3-a41c-4e85-9266-cb98d68c2134
+function ridgeplot!(f::Figure, args...; pos=(1,1), kwargs...) 
+	ridgeplot!(Axis(f[pos...]), args...; kwargs...)
+	return f
+end
+
+# ╔═╡ b4468f1c-aa33-43ab-929a-70d70e1c4e1d
+"""
+	ridgeplot(args...; kwargs...)
+
+See [ridgeplot!](@ref).
+"""
+ridgeplot(args...; kwargs...) = ridgeplot!(Figure(), args...; kwargs...)
+
+# ╔═╡ f4131214-5497-476a-bb69-a8cb3e44f110
+ridgeplot(parent(gdf), :age, :n)
+
+# ╔═╡ e3392b0f-be3e-47c1-9bb9-362cb55e8421
+parent(gdf)
 
 # ╔═╡ d0aadcba-17ca-4722-bbd2-55e493ad4983
 md"""
@@ -234,6 +299,7 @@ Chain = "8be319e6-bccf-4806-a6f7-6fae938471bc"
 DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+KernelDensity = "5ab0869b-81aa-558d-bb23-cbf5423bbe9b"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 RCall = "6f49c342-dc21-5d91-9882-a32aef131414"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
@@ -245,6 +311,7 @@ CairoMakie = "~0.6.5"
 Chain = "~0.4.8"
 DataFrameMacros = "~0.1.0"
 DataFrames = "~1.2.2"
+KernelDensity = "~0.6.3"
 PyCall = "~1.92.3"
 RCall = "~0.13.12"
 StatsBase = "~0.33.10"
@@ -1491,6 +1558,11 @@ version = "3.5.0+0"
 # ╠═3b409f81-dbe5-4ce9-9eff-3f851e1052dc
 # ╟─ebb043df-3d32-4dfa-81f4-3691b24b3375
 # ╠═5d4034f3-5066-4a61-9ea2-aef719f9058e
+# ╠═d9a2a765-c10c-430d-9387-e57aee903860
+# ╠═557e91e3-a41c-4e85-9266-cb98d68c2134
+# ╠═b4468f1c-aa33-43ab-929a-70d70e1c4e1d
+# ╠═f4131214-5497-476a-bb69-a8cb3e44f110
+# ╠═e3392b0f-be3e-47c1-9bb9-362cb55e8421
 # ╟─d0aadcba-17ca-4722-bbd2-55e493ad4983
 # ╠═71dc3848-dbed-48f4-b6cb-b6685ebfb070
 # ╠═c57fde94-0824-4f0b-9245-d765362a9951
