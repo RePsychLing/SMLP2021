@@ -4,19 +4,14 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 880ea5ac-a851-446e-8da9-d5f9f161a932
+# ╔═╡ 4ecf1267-aac9-4e8f-a522-5595b1205f43
 begin
-	using AlgebraOfGraphics
-	using AlgebraOfGraphics: linear
 	using Arrow
-	using CairoMakie
-	using CategoricalArrays
-	using CSV
+	using CairoMakie  # for Scatter
 	using DataFrames
 	using LinearAlgebra
 	using MixedModels
 	using MixedModelsMakie
-	using MixedModelsMakie: simplelinreg
 	using RCall
 	using Statistics
 	using StatsBase
@@ -25,23 +20,30 @@ end
 
 # ╔═╡ eebef932-1d63-41e5-998f-9748379c43af
 md"""
-# Mixed Models Tutorial: Basics
+# Mixed Models Tutorial: Conditional Modes and Caterpillar Plots
 
-Ths script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). Age and sex effects in physical fitness components of 108,295 third graders including 515 primary schools and 9 cohorts. [Scientific Reports 11:17566](https://rdcu.be/cwSeR)
-To circumvent delays associated with model fitting we work with models that are less complex than those in the reference publication. All the data to reproduce the models in the publication are used here, too; the script requires only a few changes to specify the more complex models in the paper. 
+This script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). 
+Physical fitness in third grade of primary school: 
+A mixed model analysis of 108,295 children and 515 schools.
 
-The script is structured in three main sections: 
+All children were between 6.0 and 6.99 years at legal keydate (30 September) of school enrollement, 
+that is in their ninth year of life in the third grade. To avoid delays associated with model 
+fitting we work with a reduced data set and less complex models than those in the reference 
+publication. The script requires only a few changes to specify the more complex models in the paper. 
 
-1. The **Setup** with reading and examing the data, plotting the main results, and specifying the contrasts for the fixed factor `Test`.
-2. A demonstration of **Model complexification** to determine a random-effect structure appropriate for and supported by the data.
-3. A **Glossary of MixedModels.jl commands** to inspect the information generated for a fitted model object. 
+The script is structured in three main sections and an Appendix: 
+
+1. **Setup** with reading and examing the data
+2. **Extraction of conditional modes** 
+3. **Caterpillar plot**
+4. **Appendix:** Source of MixedModelsMakie `caterpillar()` function
 
 ## 1. Setup
 ### 1.0 Packages and functions
 """
 
 # ╔═╡ faafd359-fb38-4f49-9dfd-19cb4f0c5a54
-function viewdf(x)  # b/c Pluto and CategoricalArrays don't play well together
+function viewdf(x)
 	DataFrame(Arrow.Table(take!(Arrow.write(IOBuffer(), x))))
 end
 
@@ -51,8 +53,8 @@ md"""
 
 1. Cohort: 9 levels; 2011-2019
 2. School: 46 levels 
-3. Child: 11566 levels; all children were between 6.0 and 6.99 years at legal keydate (30 September) of school enrollement.
-4. Sex: 5893 girls, 5673 boys
+3. Child: 11,566 levels
+4. Sex: 5,893 girls, 5,673 boys
 5. age: test date - middle of month of birthdate (ranges between 7.9 and 9.2)
 6. Test: 5 levels
      + Endurance (`Run`):  6 minute endurance run [m]; to nearest 9m in 9x18m field
@@ -63,133 +65,40 @@ md"""
  7. score - see units
 
 ### 1.2 Preprocessing
-"""
-
-# ╔═╡ 5d410833-be44-47a1-a074-f5173ab0035b
-md"""
-+ Read
-+ Transform
-+ Recode
+#### Read data
 """
 
 # ╔═╡ 39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
 dat = rcopy(R"readRDS('./data/EmotikonSubset.rds')");
+
+# ╔═╡ 0051ec83-7c30-4d28-9dfa-4c6f5d0259fa
+md"""
+#### Transformations
+"""
 
 # ╔═╡ 7440c439-9d4c-494f-9ac6-18c9fb2fe144
 begin
 	transform!(dat, :age, :age => (x -> x .- 8.5) => :a1); # centered age (linear)
 	transform!(dat,  :a1, :a1  => (x -> x.^2) => :a2);     # centered age (quadr.)
 	select!(groupby(dat,  :Test), :, :score => zscore => :zScore); # z-score
-	recode!(dat.Test, "Run" => "Endurance", "Star_r" => "Coordination",
-	                  "S20_r" => "Speed", "SLJ" => "PowerLOW", "BPT" => "PowerUP")
-	levels!(dat.Sex, ["Boys", "Girls"])
-	viewdf(dat)
-end
-
-# ╔═╡ 57693079-d489-4e8c-a745-338ccde7eab1
-md"""
-### 1.3 Figure: Age x Sex x Test
-
-The main results of relevance for this tutorial are shown in this figure. 
-There are developmental gains within the ninth year of life for each of
-the five tests and the tests differ in the magnitude of these gains. 
-Also boys outperform girls on each test and, again, the sex difference 
-varies across test.
-"""
-
-# ╔═╡ 58d561e2-77c0-43c2-990d-008286de4e5c
-md"""#### 1.3.1 Compute means"""
-
-# ╔═╡ e9280e08-ace4-48cd-ad4a-55501f315d6a
-df = groupby(   # summary grouped data frame by test, sex, rounded age
-	 combine(
-		groupby(
-			select(dat,
-				:age => (x -> cut(x, 8)) => :Age,
-				:Sex,
-				:Test,
-				:zScore,
-				:age
-			),
-			[:Age, :Sex, :Test]),
-		:zScore => mean => :zScore,
-		:age => mean => :ageM
-		),
-	:Test
-);
-
-# ╔═╡ 2574cf1c-4a9a-462b-a2f2-d599a8b42ec1
-md"""
-#### 1.3.2 Regression on `age` by `Sex` for each `Test`
-We compute the simple regression for each test for boys and girls using all observations.
-"""
-
-# ╔═╡ a7e68776-7a42-4b4a-b540-f26b8b57d520
-begin
-	test_names = levels(dat.Test)
-    comp_names = [     # establish order and labels of tbl.Test
-	    "Run" => "Endurance",
-	    "Star_r" => "Coordination",
-	    "S20_r" => "Speed",
-	    "SLJ" => "PowerLOW",
-	    "BPT" => "PowerUP",
-    ]
 end;
 
-# ╔═╡ da044d64-8464-4846-8022-443cf8c9ecfd
+# ╔═╡ 16c3cdaa-49fa-46d5-a844-03094329fe4c
+viewdf(dat)
+
+# ╔═╡ 64cc1f8e-f831-4a53-976f-dc7600b5634d
+# ... by Test and Sex
 begin
-    lms = DataFrame( 
-	    Sex = repeat(["Boys", "Girls"], inner=5), 
-	    Test = repeat(test_names, outer=2),
-	    GM = .0,
-		age = .0,
-		Estimate = "age_Sex_Text",
-	)
-  	for i in 1:10
-  	    local test_sex
-  	    test_sex = filter(
-			row -> row.Test == lms.Test[i] && row.Sex == lms.Sex[i],
-			dat,
-		)
-  		lms[i, 3:4] = simplelinreg(test_sex.age, test_sex.zScore)
-    end
-	lms
+	dat2 = combine(groupby(dat, [:Test, :Sex]), 
+                             :score => mean, :score  => std, 
+                             :zScore => mean, :zScore => std)
+	viewdf(dat2)
 end
-
-# ╔═╡ eea9c588-f5f8-4905-8774-7031162f9be0
-md"""
-#### 1.3.3 Figure 
-"""
-
-# ╔═╡ 1f6446cc-8b40-4cec-880c-3318f78a56f8
-
-begin
-	design = mapping(:age, :zScore; color = :Sex, col = :Test)
-	lines = design * linear()
-	data(dat) * lines |> draw
-end
-
-# ╔═╡ a41bc417-3ca7-4f14-be88-5a91d236e88f
-md"""
-_Figure 1._ Performance differences between 8.0 und 9.2 years by sex 
-in the five physical fitness tests presented as z-transformed data computed
-separately for each test. _Endurance_ = cardiorespiratory endurance (i.e., 6-min-
-run test), _Coordination_ = star-run test, _Speed_ = 20-m linear sprint test, 
-_PowerLOW_ = power of lower limbs (i.e., standing long jump test), _PowerUP_ = 
-apower of upper limbs (i.e., ball push test), SD = standard deviation. Points 
-are binned observed child means; lines are simple regression fits to the observations.
-"""
-
-# ╔═╡ 1ef832af-6226-45ac-97ee-2cbd5b67600a
-md"""
-#### 1.3.4 To be done
-+ Move legend into plot; drop legend title
-+ Add means of binned age groups from df
-"""
 
 # ╔═╡ c6c6f056-b8b9-4190-ac14-b900bafa04df
 md"""
-### 1.4 _SeqDiffCoding_ of `Test`
+## 2 LMMs and extraction of conditional modes 
+### 2.1 _SeqDiffCoding_ of `Test`
 
 _SeqDiffCoding_ was used in the publication. This specification tests pairwise 
 differences between the five neighboring levels of `Test`, that is: 
@@ -199,521 +108,289 @@ differences between the five neighboring levels of `Test`, that is:
 + H3: `SLJ` - `S20_r` (4-3)
 + H4: `BPT` - `SLJ` (5-4)
 
-The levels were sorted such that these contrasts map onto four  _a priori_ hypotheses; 
-in other words, they are _theoretically_ motivated pairwise comparisons. 
-The motivation also encompasses theoretically motivated interactions with `Sex`. 
-The order of levels can also be explicitly specified during contrast construction. 
-This is very useful if levels are in a different order in the dataframe.
-
-The statistical disadvantage of _SeqDiffCoding_ is that the contrasts are not orthogonal, 
-that is the contrasts are correlated. This is obvious from the fact that levels 2, 3, 
-and 4 are all used in two contrasts. One consequence of this is that correlation parameters
-estimated between neighboring contrasts (e.g., 2-1 and 3-2) are difficult to interpret. 
-Usually, they will be negative because assuming some practical limitations on the overall 
-range (e.g., between levels 1 and 3), a small "2-1" effect "correlates" negatively with a 
-larger "3-2" effect for mathematical reasons. 
-
-Obviously, the tradeoff between theoretical motivation and statistical purity is something 
-that must be considered carefully when planning the analysis. 
-
 Various options for contrast coding are the topic of the *MixedModelsTutorial_contrasts.jl*
 notbebook.
 """
 
 # ╔═╡ c5326753-a03b-4739-a82e-90ffa7c1ebdb
 begin
-	recode!(
-		dat.Test,
-		"Endurance"  => "Run",
-		"Coordination" => "Star_r",
-	    "Speed" => "S20_r",
-		"PowerLOW" => "SLJ",
-		"PowerUP" => "BPT",
-	)
-	levels!(dat.Sex,  ["Girls", "Boys"])
 	contr = merge(
         Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		Dict(:Sex => EffectsCoding(levels=["Girls", "Boys"])),
-	    Dict(:Test => SeqDiffCoding(levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])),
-        Dict(:TestHC => HelmertCoding(
-				levels=["S20_r", "SLJ", "Star_r", "Run", "BPT"],)
-			),
-	)
+		Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"])),
+	    Dict(:Test => SeqDiffCoding(; levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])),
+        Dict(:TestHC => HelmertCoding(; levels=["S20_r", "SLJ", "Star_r", "Run", "BPT"])),
+	   )
 end;
-
-# ╔═╡ f7d6782e-dcd3-423c-a7fe-c125d8e4f810
-md"""
-## 2. Model complexification
-
-We fit and compare three LMMs with the same fixed-effect structure but increasing complexity of the random-effect structure for `School`. We ignore the other two random factors `Child` and `Cohort` to avoid undue delays when fitting the models.
-
-1. LMM `m_ovi`: allowing only varying intercepts ("Grand Means");
-2. LMM `m_zcp`: adding variance components (VCs) for the four `Test` contrasts, `Sex`, and `age` to LMM `m_ovi`, yielding the zero-correlation parameters LMM;
-3. LMM `m_cpx`: adding correlation parameters (CPs) to LMM `m_zcp`; yielding a complex LMM. 
-
-In a final part illustrate how to check whether the complex model is supported by the data, rather than leading to a singular fit and, if supported by the data, whether there is an increase in goodness of fit associated with the model complexification. 
-
-### 2.1 LMM `m_ovi`
-
-In its random-effect structure (RES) we  only vary intercepts (i.e., Grand Means) for `School` (LMM `m_ovi`), that is we allow that the schools differ in the average fitness of its children, average over the five tests.
-
-It is well known that such a simple RES is likely to be anti-conservative with respect to fixed-effect test statistics. 
-"""
-
-# ╔═╡ 9a885065-59db-47a0-aa0a-8574f136a834
-begin
-	f_ovi = @formula zScore ~ 1 + Test * Sex * a1 + (1 | School);
-	m_ovi = fit(MixedModel, f_ovi, dat, contrasts=contr)
-end
-
-# ╔═╡ 8a302aae-565e-4a5c-8285-881dd36d873d
-md"""
-### 2.2 LMM `m_zcp`
-
-In this LMM we allow that schools differ not only in `GM`, but also in the size of the four contrasts defined for `Test`, in the difference between boys and girls (`Sex`) and the developmental gain children achieve within the third grade (`age`). 
-
-We assume that there is covariance associated with these CPs beyond residual noise, that is we assume that there is no detectable evidence in the data that the CPs are different from zero.
-"""
-
-# ╔═╡ c5c3172f-9801-49c8-a915-6c78c7469ae6
-begin
-	f_zcp = @formula zScore ~ 1 + Test * Sex * a1 +
-                     zerocorr(1 + Test + Sex + a1 | School);
-	m_zcp = fit(MixedModel, f_zcp, dat, contrasts=contr)
-end
-
-# ╔═╡ 5a02bce6-cbd4-4bfa-b47e-f59abaea7003
-md"""Is the model singular (overparameterized, degenerate)? In other words: Is the model **not** supported by the data?"""
-
-
-# ╔═╡ 20f1f363-5d4e-45cf-8ed2-dbb97549bc22
-md"""
-### 2.3 LMM `m_cpx`
-
-In the complex LMM investigated in this sequence we give up the assumption of zero-correlation between VCs. 
-
-"""
-
-# ╔═╡ 2db49116-5045-460b-bb9a-c4544333482e
-begin
-	f_cpx =  @formula zScore ~ 1 + Test * Sex * a1 +
-	                          (1 + Test + Sex + a1| School)
-	m_cpx = fit(MixedModel, f_cpx, dat, contrasts=contr)
-end
-
-# ╔═╡ 4b0bffc1-8b0f-4594-97f6-5449959bd716
-md"""We also need to see the VCs and CPs of the random-effect structure (RES)"""
-
-# ╔═╡ efa892f9-aff9-43e1-922d-d09f9062f172
-VarCorr(m_cpx)
-
-# ╔═╡ 565d97ca-99f3-44d5-bca6-49696003a46f
-md"""
-The  CPs associated with `Sex` are very small. Indeed, they could be removed from the LMM. The VC for `Sex`, however, is needed. The specification of these hierarchical  model comparisons within LMM `m_cpx` is left as an online demonstration.
-
-Is the model singular (overparameterized, degenerate)? In other words: Is the model **not** supported by the data?
-"""
-
-# ╔═╡ 9947810d-8d61-4d12-bf3c-37c8451f9779
-issingular(m_cpx)
-
-# ╔═╡ f6f8832b-5f62-4762-a8b0-6727e93b21a0
-md"""
-### 2.4 Model comparisons
-
-The checks of model singularity indicate the all three models are supported by the data. Does model complexification also increase the goodness of fit or are we only fitting noise?
-
-#### 2.4.1 LRT and goodness-of-fit statistics
-
-The models are strictly hierarchically nested. We compare the three LMM with a likelihood-ratio tests (LRT) and AIC and BIC goodness-of-fit statistics.
-"""
-
-
-# ╔═╡ f6b1dd53-718d-4455-80f3-9fbf14e03f54
-MixedModels.likelihoodratiotest(m_ovi, m_zcp, m_cpx)
-
-# ╔═╡ 2703966a-b129-49de-81d8-6bc8c5048dbe
-begin
-	mods = [m_ovi, m_zcp, m_cpx];
-	gof_summary = DataFrame(dof=dof.(mods), deviance=deviance.(mods),
-              AIC = aic.(mods), AICc = aicc.(mods), BIC = bic.(mods))
-end
-
-# ╔═╡ df57033d-3148-4a0a-9055-d4c8ede2a0d1
-md"""
-Both the additions of VCs and the addition of CPs significantly improved the goodness of fit.
-
-#### 2.4.2 Comparing fixed effects of `m_ovi`, `m_zcp`, and `m_cpx`
-
-We check whether enriching the RES changed the significance of fixed effects in the final model.  
-"""
-
-
-# ╔═╡ cd6623f0-2961-4871-995a-0cc2d75dd320
-begin
-	m_ovi_fe = DataFrame(coeftable(m_ovi));
-	m_zcp_fe = DataFrame(coeftable(m_zcp)); 
-	m_cpx_fe = DataFrame(coeftable(m_cpx)); 
-    m_all = hcat(m_ovi_fe[:, [1, 2, 4]],
-		        leftjoin(m_zcp_fe[:, [1, 2, 4]], m_cpx_fe[:, [1, 2, 4]],
-			on = :Name, makeunique=true), makeunique=true);
-	rename!(m_all, 
-    Dict( "Coef." => "b_ovi", "Coef._2" => "b_zcp", "Coef._1" => "b_cpx",         
-              "z" => "z_ovi",     "z_2" => "z_zcp",     "z_1" => "z_cpx"))
-	m_all2 = round.( m_all[:, [:b_ovi, :b_zcp, :b_cpx, 
-				               :z_ovi, :z_zcp, :z_cpx]], digits=2)
-	m_all3 = hcat(m_all.Name,  m_all2)
-end 
-
-# ╔═╡ bebde50e-86dd-4399-99ab-cb6542536825
-m_all.Name;
-
-# ╔═╡ 0aa76f57-10de-4e84-ae26-858250fb50a7
-md"""### 2.5 Fitting and dealing with an overparameterized LMM
-The LMMs we compared are all supported by the data. This is not to be taken for granted, however. For example, if the number of units (levels) of a grouping factor is small relative to the number of parameters we are trying to estimate, we may end up with an overparameterized / degenerate RES. 
-
-Here we attempt to fit a full CP matrix for the `Cohort` factor for the reduced set of data
-"""
-
-# ╔═╡ 09d2c2bb-9ce1-4288-a8b8-a0f67c6ce65a
-begin
-	f_cpxCohort =  @formula zScore ~ 1 + Test * a1 * Sex +
-	                                (1 + Test + a1 + Sex | Cohort)
-	m_cpxCohort = fit(MixedModel, f_cpxCohort, dat, contrasts=contr)
-end
-
-# ╔═╡ 57263322-5eb6-4a34-8167-aec88ebf1970
-issingular(m_cpxCohort)
-
-# ╔═╡ 227a7734-161c-4689-9ff4-d12a5d3ac362
-VarCorr(m_cpxCohort)
-
-# ╔═╡ ca1f28f8-57e8-4e85-aa1e-b184b8dee8f0
-md"""How about the **zero-correlation parameter** (zcp) version of this LMM?"""
-
-# ╔═╡ d5efd2c3-4890-4067-b6de-fe2aa4198cdb
-begin
-	f_zcpCohort =  @formula zScore ~ 1 + Test * a1 * Sex +
-	                        zerocorr(1 + Test + a1 + Sex| Cohort)
-	m_zcpCohort = fit(MixedModel, f_zcpCohort, dat, contrasts=contr)
-end
-
-# ╔═╡ 6654f9af-0235-40db-9ebb-05f8264a4f61
-issingular(m_zcpCohort)
-
-# ╔═╡ 45ea65a2-7a32-4da6-9be6-429c20d94283
-VarCorr(m_zcpCohort)
-
-# ╔═╡ 43693b8b-0365-4177-8655-c4c00881d185
-md"""It looks like the problem is with cohort-related variance in the `Sex` effect. Let's take it out.""" 
-
-# ╔═╡ 9f998859-add7-4c40-bd05-eab6292733c4
-begin
-	f_zcpCohort_2 =  @formula zScore ~ 1 + Test * a1 * Sex +
-	                          zerocorr(1 + Test + a1| Cohort)
-	m_zcpCohort_2 = fit(MixedModel, f_zcpCohort_2, dat, contrasts=contr)
-end
-
-# ╔═╡ 04584939-9365-4eff-b15f-0f6c5b2b8f89
-issingular(m_zcpCohort_2)
-
-# ╔═╡ 4f34f0c8-ec27-4278-944e-1225f853a371
-md"""This does solve the problem. Does LMM *m_cpxCohort* fit noise relative to the zcp LMMs?"""
-
-# ╔═╡ d98585a6-0d0d-4d5a-8eec-8c79d80745db
-MixedModels.likelihoodratiotest(m_zcpCohort_2, m_zcpCohort, m_cpxCohort)
-
-# ╔═╡ 074ececf-8dff-44cf-85d7-d48118e4e507
-md"""I would answer with "mostly yes".  How about extending the reduced LMM again with CPs? This would be a **parsimonious** LMM."""
-
-# ╔═╡ 510e8f45-7440-4ab4-a672-f91085793e91
-begin
-	f_prmCohort =  @formula zScore ~ 1 + Test * a1 * Sex +  
-	 								(1 + Test + a1| Cohort)
-	m_prmCohort = fit(MixedModel, f_prmCohort, dat, contrasts=contr)
-end
-
-# ╔═╡ c0e0f3f8-fe60-4cc2-88b0-f81ac9154a3c
-issingular(m_prmCohort)
-
-# ╔═╡ a824d97b-e235-4411-a7cf-af123bfe6c4f
-MixedModels.likelihoodratiotest(m_zcpCohort_2, m_prmCohort, m_cpxCohort)
-
-# ╔═╡ f992cf2c-b0c0-4a96-a51d-289bb6fbe317
-begin
-	gof_summary2 = DataFrame(dof=dof.([m_zcpCohort_2, m_prmCohort, m_cpxCohort]),
-		deviance=deviance.([m_zcpCohort_2, m_prmCohort, m_cpxCohort]),
-                AIC = aic.([m_zcpCohort_2, m_prmCohort, m_cpxCohort]), 
-		      AICc = aicc.([m_zcpCohort_2, m_prmCohort, m_cpxCohort]), 
-		        BIC = bic.([m_zcpCohort_2, m_prmCohort, m_cpxCohort]))
-end
-
-# ╔═╡ 3e16b4fa-6d42-4ac4-9295-9ac04b6b855e
-VarCorr(m_prmCohort)
-
-# ╔═╡ 47fd8482-81b5-4dd9-ac0a-67861a32e7ed
-md"""The decision about model selection will depend on where on the dimension with confirmatory and exploratory poles the analysis is situated."""
 
 # ╔═╡ e3cf1ee6-b64d-4356-af23-1dd5c7a0fec6
 md"""
-#### 2.6 Fitting the published LMM `m1` to the reduced data
+#### 2.2 LMMs  `m11` and `m12` for the reduced data
 
-The LMM `m1` reported in Fühner et al. (2021) included random factors for `School`,
-`Child`, and `Cohort`. The RES for `School` was specified like in LMM `m_cpx`. The
-RES for `Child` included VCs an d CPs for `Test`, but not for linear developmental
-gain in the ninth year of life `a1` or `Sex`; they are between-`Child` effects. 
+LMM `m11` corresponds to LMM `m1` in the publication, but fit to the reduced set of data. Conditional (co-)variances cannot not (yet) be computed with `Child` in the LMM. Therefore, we estimate also LMM `m12` without the random factor `Child`. For the final LMM we also estimate conditional covariances for scores, rather than effects.
 
-The RES for `Cohort` included only VCs, no CPs for `Test`. The _parsimony_ was due
-to the small number of nine levels for this grouping factor. We will check online
-whether a more complex LMM would be supported by the data. 
-
-Here we fit this LMM `m1` for the reduced data. On a MacBook Pro [13 | 15 | 16] this
-takes [303 | 250 | 244 ] s; for LMM `m1a` (i.e., dropping 1 school-relate VC for
-`Sex`), times are  [212 | 165 | 160] s. The corresponding `lme4` times for LMM `m1`
-are [397  | 348 | 195]. 
-
-Finally, times for fitting the full set of data --not in this script--, for LMM `m1`are 
-[60 | 62 | 85] minutes (!); for LMM `m1a` the times were [46 | 48 | 34] minutes. It was 
-not possible to fit the full set of data with `lme4`; after about 13 to 18 minutes the 
-program stopped with:  `Error in eval_f(x, ...) : Downdated VtV is not positive definite.`
 """
-
-
 
 # ╔═╡ 0dd0d060-81b4-4cc0-b306-dda7589adbd2
 begin
-	f1 =  @formula zScore ~ 1 + Test * a1 * Sex +
-	                       (1 + Test + a1 + Sex | School) + (1 + Test | Child) +
-					        zerocorr(1 + Test | Cohort)
-	m1 = fit(MixedModel, f1, dat, contrasts=contr)
+    f11 = @formula zScore ~ 1 + Test * a1 * Sex +  
+                           (1 + Test + a1 | School) + (1 + Test | Child) +
+                   zerocorr(1 + Test | Cohort);
+    m11 = fit(MixedModel, f11, dat)
+    VarCorr(m11)
 end
 
-# ╔═╡ b8728c1a-b20e-4e88-ba91-927b6272c6d5
-issingular(m1)
-
-# ╔═╡ 5f7a0626-92af-4ec7-aa86-e3559efab511
-VarCorr(m1)
-
-# ╔═╡ 242d5f20-b42a-4043-9fe1-5b272cf60194
-md"""Let's remove the school-related sex VC."""
-
-# ╔═╡ 1b2d8df1-4de9-4546-a39e-116e00d9ef95
+# ╔═╡ f68f6884-7c37-4868-b0b7-01ad450ee383
 begin
-	f1a =  @formula zScore ~ 1 + Test * a1 * Sex +
-	                        (1 + Test + a1 | School) + (1 + Test | Child) +
-				    zerocorr(1 + Test | Cohort)
-	m1a = fit(MixedModel, f1a, dat, contrasts=contr)
+    f12 = @formula zScore ~ 1 + Test * a1 * Sex +  
+                           (1 + Test + a1 | School) + 
+                   zerocorr(1 + Test | Cohort);
+    m12 = fit(MixedModel, f12, dat)
+    VarCorr(m12)
 end
 
-# ╔═╡ a59cb90a-9d16-41d6-a9a6-35b38a08893e
-issingular(m1a)
-
-# ╔═╡ 730d919b-30f5-409b-a79f-598e809e368a
-VarCorr(m1a)
-
-# ╔═╡ abfd9185-b77b-4b60-99f8-9bbb89914a77
-MixedModels.likelihoodratiotest(m1a, m1)
-
-# ╔═╡ e3819941-6254-46a1-97d8-7944ef23f1bc
-md"""After removal of the non-significant school-related VC for `Sex` the model is no longer overparameterized for the reduced data set."""
-
-# ╔═╡ 46e4c42d-fc89-4d12-b700-6c3f087e64ca
-md"""
-## 3. Glossary of _MixedModels.jl_ commands
-
-Here we introduce most of the commands available in the _MixedModels.jl_ 
-package that allow the immediated inspection and analysis of results returned in a fitted _linear_ mixed-effect model. 
-
-Postprocessing related to conditional modes will be dealt with in a different tutorial.
-
-### 3.1 Overall summary statistics
-
-```
-+ julia> m1.optsum         # MixedModels.OptSummary:  gets all info 
-+ julia> loglikelihood(m1) # StatsBase.loglikelihood: return loglikelihood
-							 of the model
-+ julia> deviance(m1)      # StatsBase.deviance: negative twice the log-likelihood
-							 relative to saturated model
-+ julia> objective(m1)     # MixedModels.objective: saturated model not clear:
-							 negative twice the log-likelihood
-+ julia> nobs(m1)          # n of observations; they are not independent
-+ julia> dof(m1)           # n of degrees of freedom is number of model parameters
-+ julia> aic(m1)           # objective(m1) + 2*dof(m1)
-+ julia> bic(m1)           # objective(m1) + dof(m1)*log(nobs(m1))
-```
-"""
-
-
-# ╔═╡ 0caf1da1-4d06-49b8-b1b4-d24a860c68d8
-m1.optsum            # MixedModels.OptSummary:  gets all info
-
-# ╔═╡ 117132af-b6bb-4b11-a92d-3fc34aff3a63
-loglikelihood(m_cpx) # StatsBase.loglikelihood: return loglikelihood of the model
-
-# ╔═╡ e707d474-c553-4142-8b40-d6d944cbc58a
-deviance(m_cpx)      # StatsBase.deviance: negative twice the log-likelihood relative to saturated mode`
-
-# ╔═╡ ba7c1050-6b29-4dc2-a97b-552bdc259ac0
-objective(m_cpx)    # MixedModels.objective: saturated model not clear: negative twice the log-likelihood
-
-# ╔═╡ 80abc5b9-9d9d-4a67-a542-1be2dc1eca0f
-nobs(m1) # n of observations; they are not independent
-
-# ╔═╡ d413615b-1ea8-46b2-837c-52a8f147b456
-dof(m1)  # n of degrees of freedom is number of model parameters
-
-# ╔═╡ 2a58411c-c975-4477-8e76-0b9b59000e75
-aic(m1)  # objective(m1) + 2*dof(m1)
-
-# ╔═╡ 1caa69ec-f1db-4de5-a30a-3d65fd45f5bd
-bic(m1)  # objective(m1) + dof(m1)*log(nobs(m1))
-
-# ╔═╡ f300cd09-9abe-4dcf-91e2-dbba7e87b8c1
-md"""
-### 3.2 Fixed-effect statistics
-```
-+ julia> coeftable(m1)     # StatsBase.coeftable: fixed-effects statiscs; 
-						     default level=0.95
-+ julia> Arrow.write("./data/m_cpx_fe.arrow", DataFrame(coeftable(m1)));
-+ julia> coef(m1)          # StatsBase.coef - parts of the table
-+ julia> fixef(m1)         # MixedModels.fixef: not the same as coef() 
-                             for rank-deficient case
-+ julia> m1.beta           # alternative extractor
-+ julia> fixefnames(m1)    # works also for coefnames(m1)
-+ julia> vcov(m1)          # StatsBase.vcov: var-cov matrix of fixed-effects coef.
-+ julia> stderror(m1)      # StatsBase.stderror: SE for fixed-effects coefficients
-+ julia> propertynames(m1) # names of available extractors
-```
-"""
-
-
-# ╔═╡ 0cc6ca34-7699-4a85-a174-6fdf1a985613
-coeftable(m1) # StatsBase.coeftable: fixed-effects statiscs; default level=0.95
-
-# ╔═╡ 222380a0-8b36-4920-a70d-0fa480005748
-Arrow.write("./data/m_cpx_fe.arrow", DataFrame(coeftable(m1)));
-
-# ╔═╡ 0c998d91-d4cf-4c71-8f4b-38ac21f8169e
-coef(m1)              # StatsBase.coef; parts of the table
-
-# ╔═╡ b7c715ed-4d11-4256-8ce6-0793388d9dfc
-fixef(m1)    # MixedModels.fixef: not the same as coef() for rank-deficient case
-
-# ╔═╡ d9e6af5c-a302-481b-a8a9-2f48d01884a5
-m1.β                  # alternative extractor
-
-# ╔═╡ 56e4cd41-1cf3-416c-856a-9cc939fe51cb
-fixefnames(m1)        # works also for coefnames(m1)
-
-# ╔═╡ 75999511-1600-4ce5-8bb7-6dc841bbbd50
-vcov(m1)   # StatsBase.vcov: var-cov matrix of fixed-effects coefficients
-
-# ╔═╡ 815c070a-8cc1-40f3-91bb-7c38f904399b
-vcov(m1; corr=true) # StatsBase.vcov: correlation matrix of fixed-effects coefficients
-
-# ╔═╡ 4eef686a-6943-45a8-8309-e1b264af34b5
-stderror(m1)       # StatsBase.stderror: SE for fixed-effects coefficients
-
-# ╔═╡ 89a1cfec-2b87-4bf9-95e3-7c7312069af8
-propertynames(m1)  # names of available extractors
-
-# ╔═╡ 1ee16dfe-97d6-4958-b9c4-cf2812691057
-md"""
-### 3.3 Covariance parameter estimates
-These commands inform us about the model parameters associated with the RES.
-```
-+ julia> issingular(m1)        # Test singularity for param. vector m1.theta
-+ julia> VarCorr(m1)           # MixedModels.VarCorr: est. of RES
-+ julia> propertynames(m1)
-+ julia> m1.σ                  # residual; or: m1.sigma
-+ julia> m1.σs                 # VCs; m1.sigmas
-+ julia> m1.θ                  # Parameter vector for RES (w/o residual); m1.theta
-+ julia> MixedModels.sdest(m1) #  prsqrt(MixedModels.varest(m1))
-+ julia> BlockDescription(m1)  #  Description of blocks of A and L in an LMM
-```
-"""
-
-# ╔═╡ 7302b067-270f-4d6a-a0c6-fabd46cc72b0
-issingular(m1) # Test if model is singular for paramter vector m1.theta (default)
-
-# ╔═╡ acd9a3eb-6eae-4e09-8932-e44f91e725b4
-VarCorr(m1) # MixedModels.VarCorr: estimates of random-effect structure (RES)
-
-# ╔═╡ 1c9de228-93a4-4d1a-82b5-48fe22cfe0f1
-m1.σs      # VCs; m1.sigmas
-
-# ╔═╡ 363dcab6-f9f7-42e7-9de7-6a9616cb060f
-m1.θ       # Parameter vector for RES (w/o residual); m1.theta
-
-# ╔═╡ f0538b16-e32e-4393-81d2-1d0ce271d619
-BlockDescription(m1) #  Description of blocks of A and L in a LinearMixedModel
-
-# ╔═╡ ae8aae41-58bd-49b6-a56e-d05cad10c22f
-md"""
-### 3.4 Model "predictions" 
-These commands inform us about extracion of conditional modes/means and (co-)variances, that using the model parameters to improve the predictions for units (levels) of the grouping (random) factors. We need this information, e.g., for partial-effect response profiles (e.g., facet plot) or effect profiles (e.g., caterpillar plot), or visualizing the borrowing-strength effect for correlation parameters (e.g., shrinkage plots). 
-
-```
-+ julia> 
-+ julia> condVar(m1a)
-+ julia> 
-+ julia> 
-```
-
-Some plotting functions are currently available from the `MixedModelsMakie` package or via custom functions.
-
-```
-+ julia> 
-+ julia> caterpillar!(m1, orderby=1)
-+ julia> shrinkage!(m1)
-```
-
-"""
-
-# ╔═╡ 3b24e3f0-4f93-42d5-ba93-eeb23a1e8bd3
-md" #### 3.4.1 Conditional covariances"
-
-# ╔═╡ da3c1ba5-55cf-41f1-8cd6-8b2784532476
-cv_m1 = condVar(m1)
-
-# ╔═╡ b2e83fe2-b60d-415d-8577-c0958bfe8d0e
-md"""
-They are hard to look at. Let's take pictures.
-#### 3.4.2 Caterpillar plots
-"""
-
-# ╔═╡ 80feb95f-4eb1-4363-8223-1d42f9c637a9
-begin	# Cohort
-	cm_m1_chrt = ranefinfo(m1)[:Cohort];
-	caterpillar!(Figure(; resolution=(800,400)), cm_m1_chrt; orderby=1)
+# ╔═╡ a1186b62-81fd-4f99-ba59-45c213ec264b
+begin
+    f13 = @formula zScore ~ 1 + Test * a1 * Sex +  
+                           (0 + Test + a1 | School) + 
+                   zerocorr(0 + Test | Cohort);
+    m13 = fit(MixedModel, f13, dat)
+    VarCorr(m13)
 end
 
-# ╔═╡ 323d7697-62de-4cc0-900d-5137e9e627fb
-begin	# School
-	cm_m1_schl = ranefinfo(m1)[:School];  
-	caterpillar!(Figure(; resolution=(800,800)), cm_m1_schl; orderby=1)
+# ╔═╡ ef1dfbf4-700c-4093-9824-01368c511531
+md"""
+### 2.2 Conditional modes (BLUPs)
+#### Three random factors
+"""
+
+# ╔═╡ ace9a2f8-075a-49b5-94eb-12be4ffb6568
+begin
+ cms11 = raneftables(m11);   
+ cms11_Schl = DataFrame(cms11.School);
+ cms11_Chld = DataFrame(cms11.Child);
+ cms11_Chrt = DataFrame(cms11.Cohort)
 end
 
-# ╔═╡ e07e768b-a1ba-438a-8082-de818e798565
-md"#### 3.4.2 Shrinkage plots"
+# ╔═╡ 167fbd71-2a7b-4afa-8ffb-815dcda63129
+md"""
+#### Two random factors -- w/o Child
 
-# ╔═╡ b044860a-c571-4dcb-bc3c-d5b07fe58695
-shrinkageplot!(Figure(; resolution=(800,800)), m1, :Cohort)
+First LMM m12 with effects; the second LMM m13 with scores.
+"""
 
-# ╔═╡ 6754c267-0ea7-4369-97a8-dfce330ceed1
-shrinkageplot!(Figure(; resolution=(800,800)), m1, :School)
+# ╔═╡ 68ee8abb-04e6-45ee-8f0a-033e7d2ef57b
+begin
+    cms12 = raneftables(m12);   
+    cms12_Schl = DataFrame(cms12.School);
+    cms12_Chrt = DataFrame(cms12.Cohort);
+end
 
-# ╔═╡ 91db2051-b222-41c4-96c5-a2fa0c977bfa
-md" These are just teasers. We will pick this up in a separate tutorial. Enjoy! "
+# ╔═╡ 3a3c50c6-7372-49f9-94c9-36b4d71d5ff6
+begin
+  cms13 = raneftables(m13);   
+  cms13_Schl = DataFrame(cms13.School);
+  cms13_Chrt = DataFrame(cms13.Cohort);
+end
+
+# ╔═╡ dd8b5c05-c1c8-4778-b179-1ad39f50f8d3
+md"""
+### 2.3 Conditional (co-)variances
+### Three random factors
+"""
+
+# ╔═╡ 25376bb3-4673-4c89-8600-6e3da85971b4
+BlockDescription(m11)
+
+# ╔═╡ e7cdd374-57c3-4d3c-9b1b-b6a211733b81
+cvs11 = condVar(m11) 
+
+# ╔═╡ 1a2586a6-ff9d-4067-a5af-6c0ee6929e81
+md"""
+### Two random factors - w/o Child
+First LMM m12 with effects; then LMM m13 with scores.
+"""
+
+# ╔═╡ d2c0979e-ed52-4b56-b3ec-58db1609843e
+begin
+    BlockDescription(m12)
+    cvs12 = condVar(m12);    # 2-element Vector{Array{Float64, 3}}
+	cvs12_Schl = cvs12[1] 
+end
+
+# ╔═╡ cf3f5312-6702-4069-95aa-862dc54d9a34
+cvs12_Chrt = cvs12[2]    # 5×5×9 Array{Float64, 3}:
+
+# ╔═╡ 4c5f8c2a-85b0-45a6-925d-1deaa1f302d2
+md"""
+We can also look at scores rather than effects.
+"""
+
+# ╔═╡ 17d31da0-9579-4d8f-9b7f-2cd987200d2e
+begin
+    BlockDescription(m13)
+    cvs13 = condVar(m13);    # 2-element Vector{Array{Float64, 3}}
+	cvs13_Schl = cvs13[1] 
+end
+
+# ╔═╡ 90ffbb02-139c-4a28-ac76-47e414974840
+cvs13_Chrt = cvs13[2] 
+
+# ╔═╡ 5a62529e-cc10-4e2c-8d75-125951f2dc34
+md"""
+## 3 Caterpillar plots
+
+A "caterpillar plot" is a horizontal error-bar plot of conditional modes and credibility intervals.
+
+    caterpillar(m::LinearMixedModel, gf::Symbol)
+
+In the case of LMMs, conditonal modes are the conditional means.
+"""
+
+# ╔═╡ cb6195ea-296d-4cd2-9be0-906ebf42d5a3
+md"""
+### 3.1 LMM `m11_Cohort`
+#### **Effects**
+"""
+
+# ╔═╡ d9459ffb-f9db-4a4e-9e25-5b34df6540c5
+md"""
+### 3.2 LMM `m12_Cohort`
+#### **Effects**
+"""
+
+# ╔═╡ 58651ebc-2c69-4814-af5e-87fd5d7c3b52
+md"""#### Scores"""
+
+# ╔═╡ 53ed436c-82b9-4331-bef4-0e034c233e7f
+md"""
+### 3.3 LMM `m12_School`
+#### Effects
+"""
+
+# ╔═╡ 61cd093e-aa4e-475a-9d62-3ddd3e2b5fd7
+md"""
+#### Scores
+"""
+
+# ╔═╡ 10ef55d6-6048-4353-92e5-e4621bfb130e
+md"""
+## 4 APPENDIX: Source of MixedModelsMakie caterpillar function
+
+These functions are **disabled** at the start of the notebook. The `caterpillar` function is available from the package `MixedModelsMakie`.  It generates and uses information on random effects conditional modes/means, variances, etc.
+
+"""
+
+# ╔═╡ cbe2197e-12c7-4d55-8817-d25d7b7cc5bd
+md"""
+```
+struct RanefInfo{T<:AbstractFloat}
+    cnames::Vector{String}
+    levels::Vector
+    ranef::Matrix{T}
+    stddev::Matrix{T}
+end
+```
+"""
+
+# ╔═╡ 32acfdf0-ecb6-4acb-904f-d7b963771d6d
+md"""
+
+`ranefinfo(m::LinearMixedModel)`
+
+Return a `NamedTuple{fnames(m), NTuple(k, RanefInfo)}` from model `m`
+"""
+
+# ╔═╡ 90ce17cc-d497-4605-aa62-be69343e03eb
+function ranefinfo(m::LinearMixedModel{T}) where {T}
+    fn = fnames(m)
+    val = sizehint!(RanefInfo[], length(fn))
+    for (re, eff, cv) in zip(m.reterms, ranef(m), condVar(m))
+        push!(
+            val, 
+            RanefInfo(
+                re.cnames,
+                re.levels,
+                Matrix(adjoint(eff)),
+                Matrix(adjoint(dropdims(sqrt.(mapslices(diag, cv, dims=1:2)), dims=2))),
+            )
+        )
+    end
+    NamedTuple{fn}((val...,))
+end
+
+# ╔═╡ 2f8e0b3c-2768-457e-9688-1928301871f5
+rem12 = ranefinfo(m12);
+
+# ╔═╡ 5dab1a5a-ac84-4516-a8bc-487261a05258
+rem13 = ranefinfo(m13);
+
+# ╔═╡ ffcc35da-25b8-4bee-80d2-93b033584cd4
+md"""
+  
+`caterpillar!(f::Figure, r::RanefInfo; orderby=1)`
+
+Add Axes of a caterpillar plot from `r` to `f`.
+
+The order of the levels on the vertical axes is increasing `orderby` column
+of `r.ranef`, usually the `(Intercept)` random effects.
+"""
+
+
+# ╔═╡ d1efb45b-44e4-4a6c-a967-0dc054a5ae83
+function caterpillar!(f::Figure, r::RanefInfo; orderby=1)
+    rr = r.ranef
+    vv = view(rr, :, orderby)
+    ord = sortperm(vv)
+    y = axes(rr, 1)
+    cn = r.cnames
+    axs = [Axis(f[1, j]) for j in axes(rr, 2)]
+    linkyaxes!(axs...)
+    for (j, ax) in enumerate(axs)
+        xvals = view(rr, ord, j)
+        scatter!(ax, xvals, y, color=(:red, 0.2))
+        errorbars!(ax, xvals, y, view(r.stddev, ord, j), direction=:x)
+        ax.xlabel = cn[j]
+        ax.yticks = y
+        j > 1 && hideydecorations!(ax, grid=false)
+    end
+    axs[1].yticks = (y, r.levels[ord])
+    f
+end
+
+
+# ╔═╡ 64e3f006-9120-40a5-97da-8d6694a7cc87
+caterpillar!(Figure(; resolution=(800,400)), ranefinfo(m11).Cohort; orderby=1)
+
+# ╔═╡ 9a0194cd-3f96-4014-b146-a7842a4fa22f
+caterpillar!(Figure(; resolution=(800,400)), rem12.Cohort; orderby=1)
+
+# ╔═╡ 407dcab5-40e4-4b53-a5ce-b771c76b8497
+caterpillar!(Figure(; resolution=(800,400)), rem13.Cohort; orderby=2)
+
+# ╔═╡ 26465af0-c83b-4e1c-9a8d-800a8140e5c0
+caterpillar!(Figure(; resolution=(800,800)), rem12.School; orderby=3)
+
+# ╔═╡ 205b7fdb-2db6-4c81-a75b-b0729f57735e
+caterpillar!(Figure(; resolution=(800,800)), rem13.School; orderby=6)
+
+# ╔═╡ 781486fc-79b4-4e2e-9902-c29c3e4460b6
+md"""
+    caterpillar(m::LinearMixedModel, gf::Symbol)
+Returns a `Figure` of a "caterpillar plot" of the random-effects means and prediction intervals
+A "caterpillar plot" is a horizontal error-bar plot of conditional means and standard deviations
+of the random effects.
+"""
+
+# ╔═╡ 28e8dc7f-7841-4651-9119-de785086124a
+function caterpillar(m::LinearMixedModel, gf::Symbol=first(fnames(m)))
+    caterpillar!(Figure(resolution=(1000,800)), ranefinfo(m)[gf])
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
-CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
@@ -723,11 +400,8 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
-AlgebraOfGraphics = "~0.5.3"
 Arrow = "~1.6.2"
-CSV = "~0.8.5"
 CairoMakie = "~0.6.5"
-CategoricalArrays = "~0.10.0"
 DataFrames = "~1.2.2"
 MixedModels = "~4.1.1"
 MixedModelsMakie = "~0.3.7"
@@ -755,12 +429,6 @@ deps = ["LinearAlgebra"]
 git-tree-sha1 = "84918055d15b3114ede17ac6a7182f68870c16f7"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 version = "3.3.1"
-
-[[AlgebraOfGraphics]]
-deps = ["Colors", "Dates", "FileIO", "GLM", "GeoInterface", "GeometryBasics", "GridLayoutBase", "KernelDensity", "Loess", "Makie", "PlotUtils", "PooledArrays", "RelocatableFolders", "StatsBase", "StructArrays", "Tables"]
-git-tree-sha1 = "40446e661ffe7a33c31980ec6438181daa41deff"
-uuid = "cbdf2221-f076-402e-a563-3d30da359d67"
-version = "0.5.3"
 
 [[Animations]]
 deps = ["Colors"]
@@ -829,12 +497,6 @@ version = "1.0.8+0"
 git-tree-sha1 = "215a9aa4a1f23fbd05b92769fdd62559488d70e9"
 uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 version = "0.4.1"
-
-[[CSV]]
-deps = ["Dates", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "Tables", "Unicode"]
-git-tree-sha1 = "b83aa3f513be680454437a0eee21001607e5d983"
-uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
-version = "0.8.5"
 
 [[Cairo]]
 deps = ["Cairo_jll", "Colors", "Glib_jll", "Graphics", "Libdl", "Pango_jll"]
@@ -977,12 +639,6 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 deps = ["Mmap"]
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 
-[[Distances]]
-deps = ["LinearAlgebra", "Statistics", "StatsAPI"]
-git-tree-sha1 = "abe4ad222b26af3337262b8afb28fab8d215e9f8"
-uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
-version = "0.10.3"
-
 [[Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -1113,12 +769,6 @@ deps = ["Distributions", "LinearAlgebra", "Printf", "Reexport", "SparseArrays", 
 git-tree-sha1 = "f564ce4af5e79bb88ff1f4488e64363487674278"
 uuid = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
 version = "1.5.1"
-
-[[GeoInterface]]
-deps = ["RecipesBase"]
-git-tree-sha1 = "38a649e6a52d1bea9844b382343630ac754c931c"
-uuid = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
-version = "0.5.5"
 
 [[GeometryBasics]]
 deps = ["EarCut_jll", "IterTools", "LinearAlgebra", "StaticArrays", "StructArrays", "Tables"]
@@ -1371,12 +1021,6 @@ version = "2.36.0+0"
 deps = ["Libdl"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
-[[Loess]]
-deps = ["Distances", "LinearAlgebra", "Statistics"]
-git-tree-sha1 = "b5254a86cf65944c68ed938e575f5c81d5dfe4cb"
-uuid = "4345ca2d-374a-55d4-8d30-97f9976e7612"
-version = "0.5.3"
-
 [[LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
 git-tree-sha1 = "3d682c07e6dd250ed082f883dc88aee7996bf2cc"
@@ -1610,9 +1254,9 @@ version = "1.47.0+0"
 
 [[Parsers]]
 deps = ["Dates"]
-git-tree-sha1 = "bfd7d8c7fd87f04543810d9cbd3995972236ba1b"
+git-tree-sha1 = "438d35d2d95ae2c5e8780b330592b6de8494e779"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "1.1.2"
+version = "2.0.3"
 
 [[Pixman_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -2071,106 +1715,54 @@ version = "3.5.0+0"
 
 # ╔═╡ Cell order:
 # ╟─eebef932-1d63-41e5-998f-9748379c43af
-# ╠═880ea5ac-a851-446e-8da9-d5f9f161a932
+# ╠═4ecf1267-aac9-4e8f-a522-5595b1205f43
 # ╠═faafd359-fb38-4f49-9dfd-19cb4f0c5a54
 # ╟─ee85abd9-0172-44d3-b03a-c6a780d33c72
-# ╟─5d410833-be44-47a1-a074-f5173ab0035b
 # ╠═39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
+# ╟─0051ec83-7c30-4d28-9dfa-4c6f5d0259fa
 # ╠═7440c439-9d4c-494f-9ac6-18c9fb2fe144
-# ╟─57693079-d489-4e8c-a745-338ccde7eab1
-# ╟─58d561e2-77c0-43c2-990d-008286de4e5c
-# ╠═e9280e08-ace4-48cd-ad4a-55501f315d6a
-# ╟─2574cf1c-4a9a-462b-a2f2-d599a8b42ec1
-# ╠═a7e68776-7a42-4b4a-b540-f26b8b57d520
-# ╠═da044d64-8464-4846-8022-443cf8c9ecfd
-# ╟─eea9c588-f5f8-4905-8774-7031162f9be0
-# ╠═1f6446cc-8b40-4cec-880c-3318f78a56f8
-# ╟─a41bc417-3ca7-4f14-be88-5a91d236e88f
-# ╟─1ef832af-6226-45ac-97ee-2cbd5b67600a
+# ╠═16c3cdaa-49fa-46d5-a844-03094329fe4c
+# ╠═64cc1f8e-f831-4a53-976f-dc7600b5634d
 # ╟─c6c6f056-b8b9-4190-ac14-b900bafa04df
 # ╠═c5326753-a03b-4739-a82e-90ffa7c1ebdb
-# ╟─f7d6782e-dcd3-423c-a7fe-c125d8e4f810
-# ╠═9a885065-59db-47a0-aa0a-8574f136a834
-# ╟─8a302aae-565e-4a5c-8285-881dd36d873d
-# ╠═c5c3172f-9801-49c8-a915-6c78c7469ae6
-# ╟─5a02bce6-cbd4-4bfa-b47e-f59abaea7003
-# ╟─20f1f363-5d4e-45cf-8ed2-dbb97549bc22
-# ╠═2db49116-5045-460b-bb9a-c4544333482e
-# ╟─4b0bffc1-8b0f-4594-97f6-5449959bd716
-# ╠═efa892f9-aff9-43e1-922d-d09f9062f172
-# ╟─565d97ca-99f3-44d5-bca6-49696003a46f
-# ╠═9947810d-8d61-4d12-bf3c-37c8451f9779
-# ╟─f6f8832b-5f62-4762-a8b0-6727e93b21a0
-# ╠═f6b1dd53-718d-4455-80f3-9fbf14e03f54
-# ╠═2703966a-b129-49de-81d8-6bc8c5048dbe
-# ╟─df57033d-3148-4a0a-9055-d4c8ede2a0d1
-# ╠═cd6623f0-2961-4871-995a-0cc2d75dd320
-# ╠═bebde50e-86dd-4399-99ab-cb6542536825
-# ╟─0aa76f57-10de-4e84-ae26-858250fb50a7
-# ╠═09d2c2bb-9ce1-4288-a8b8-a0f67c6ce65a
-# ╠═57263322-5eb6-4a34-8167-aec88ebf1970
-# ╠═227a7734-161c-4689-9ff4-d12a5d3ac362
-# ╟─ca1f28f8-57e8-4e85-aa1e-b184b8dee8f0
-# ╠═d5efd2c3-4890-4067-b6de-fe2aa4198cdb
-# ╠═6654f9af-0235-40db-9ebb-05f8264a4f61
-# ╠═45ea65a2-7a32-4da6-9be6-429c20d94283
-# ╟─43693b8b-0365-4177-8655-c4c00881d185
-# ╠═9f998859-add7-4c40-bd05-eab6292733c4
-# ╠═04584939-9365-4eff-b15f-0f6c5b2b8f89
-# ╟─4f34f0c8-ec27-4278-944e-1225f853a371
-# ╠═d98585a6-0d0d-4d5a-8eec-8c79d80745db
-# ╟─074ececf-8dff-44cf-85d7-d48118e4e507
-# ╠═510e8f45-7440-4ab4-a672-f91085793e91
-# ╠═c0e0f3f8-fe60-4cc2-88b0-f81ac9154a3c
-# ╠═a824d97b-e235-4411-a7cf-af123bfe6c4f
-# ╠═f992cf2c-b0c0-4a96-a51d-289bb6fbe317
-# ╠═3e16b4fa-6d42-4ac4-9295-9ac04b6b855e
-# ╟─47fd8482-81b5-4dd9-ac0a-67861a32e7ed
 # ╟─e3cf1ee6-b64d-4356-af23-1dd5c7a0fec6
 # ╠═0dd0d060-81b4-4cc0-b306-dda7589adbd2
-# ╠═b8728c1a-b20e-4e88-ba91-927b6272c6d5
-# ╠═5f7a0626-92af-4ec7-aa86-e3559efab511
-# ╟─242d5f20-b42a-4043-9fe1-5b272cf60194
-# ╠═1b2d8df1-4de9-4546-a39e-116e00d9ef95
-# ╠═a59cb90a-9d16-41d6-a9a6-35b38a08893e
-# ╠═730d919b-30f5-409b-a79f-598e809e368a
-# ╠═abfd9185-b77b-4b60-99f8-9bbb89914a77
-# ╟─e3819941-6254-46a1-97d8-7944ef23f1bc
-# ╟─46e4c42d-fc89-4d12-b700-6c3f087e64ca
-# ╠═0caf1da1-4d06-49b8-b1b4-d24a860c68d8
-# ╠═117132af-b6bb-4b11-a92d-3fc34aff3a63
-# ╠═e707d474-c553-4142-8b40-d6d944cbc58a
-# ╠═ba7c1050-6b29-4dc2-a97b-552bdc259ac0
-# ╠═80abc5b9-9d9d-4a67-a542-1be2dc1eca0f
-# ╠═d413615b-1ea8-46b2-837c-52a8f147b456
-# ╠═2a58411c-c975-4477-8e76-0b9b59000e75
-# ╠═1caa69ec-f1db-4de5-a30a-3d65fd45f5bd
-# ╟─f300cd09-9abe-4dcf-91e2-dbba7e87b8c1
-# ╠═0cc6ca34-7699-4a85-a174-6fdf1a985613
-# ╠═222380a0-8b36-4920-a70d-0fa480005748
-# ╠═0c998d91-d4cf-4c71-8f4b-38ac21f8169e
-# ╠═b7c715ed-4d11-4256-8ce6-0793388d9dfc
-# ╠═d9e6af5c-a302-481b-a8a9-2f48d01884a5
-# ╠═56e4cd41-1cf3-416c-856a-9cc939fe51cb
-# ╠═75999511-1600-4ce5-8bb7-6dc841bbbd50
-# ╠═815c070a-8cc1-40f3-91bb-7c38f904399b
-# ╠═4eef686a-6943-45a8-8309-e1b264af34b5
-# ╠═89a1cfec-2b87-4bf9-95e3-7c7312069af8
-# ╠═1ee16dfe-97d6-4958-b9c4-cf2812691057
-# ╠═7302b067-270f-4d6a-a0c6-fabd46cc72b0
-# ╠═acd9a3eb-6eae-4e09-8932-e44f91e725b4
-# ╠═1c9de228-93a4-4d1a-82b5-48fe22cfe0f1
-# ╠═363dcab6-f9f7-42e7-9de7-6a9616cb060f
-# ╠═f0538b16-e32e-4393-81d2-1d0ce271d619
-# ╟─ae8aae41-58bd-49b6-a56e-d05cad10c22f
-# ╟─3b24e3f0-4f93-42d5-ba93-eeb23a1e8bd3
-# ╠═da3c1ba5-55cf-41f1-8cd6-8b2784532476
-# ╟─b2e83fe2-b60d-415d-8577-c0958bfe8d0e
-# ╠═80feb95f-4eb1-4363-8223-1d42f9c637a9
-# ╠═323d7697-62de-4cc0-900d-5137e9e627fb
-# ╟─e07e768b-a1ba-438a-8082-de818e798565
-# ╠═b044860a-c571-4dcb-bc3c-d5b07fe58695
-# ╠═6754c267-0ea7-4369-97a8-dfce330ceed1
-# ╟─91db2051-b222-41c4-96c5-a2fa0c977bfa
+# ╠═f68f6884-7c37-4868-b0b7-01ad450ee383
+# ╠═a1186b62-81fd-4f99-ba59-45c213ec264b
+# ╟─ef1dfbf4-700c-4093-9824-01368c511531
+# ╠═ace9a2f8-075a-49b5-94eb-12be4ffb6568
+# ╟─167fbd71-2a7b-4afa-8ffb-815dcda63129
+# ╠═68ee8abb-04e6-45ee-8f0a-033e7d2ef57b
+# ╠═3a3c50c6-7372-49f9-94c9-36b4d71d5ff6
+# ╟─dd8b5c05-c1c8-4778-b179-1ad39f50f8d3
+# ╠═25376bb3-4673-4c89-8600-6e3da85971b4
+# ╠═e7cdd374-57c3-4d3c-9b1b-b6a211733b81
+# ╟─1a2586a6-ff9d-4067-a5af-6c0ee6929e81
+# ╠═d2c0979e-ed52-4b56-b3ec-58db1609843e
+# ╠═cf3f5312-6702-4069-95aa-862dc54d9a34
+# ╟─4c5f8c2a-85b0-45a6-925d-1deaa1f302d2
+# ╠═17d31da0-9579-4d8f-9b7f-2cd987200d2e
+# ╠═90ffbb02-139c-4a28-ac76-47e414974840
+# ╟─5a62529e-cc10-4e2c-8d75-125951f2dc34
+# ╟─cb6195ea-296d-4cd2-9be0-906ebf42d5a3
+# ╠═64e3f006-9120-40a5-97da-8d6694a7cc87
+# ╟─d9459ffb-f9db-4a4e-9e25-5b34df6540c5
+# ╠═2f8e0b3c-2768-457e-9688-1928301871f5
+# ╠═9a0194cd-3f96-4014-b146-a7842a4fa22f
+# ╟─58651ebc-2c69-4814-af5e-87fd5d7c3b52
+# ╠═5dab1a5a-ac84-4516-a8bc-487261a05258
+# ╠═407dcab5-40e4-4b53-a5ce-b771c76b8497
+# ╟─53ed436c-82b9-4331-bef4-0e034c233e7f
+# ╠═26465af0-c83b-4e1c-9a8d-800a8140e5c0
+# ╟─61cd093e-aa4e-475a-9d62-3ddd3e2b5fd7
+# ╠═205b7fdb-2db6-4c81-a75b-b0729f57735e
+# ╟─10ef55d6-6048-4353-92e5-e4621bfb130e
+# ╠═cbe2197e-12c7-4d55-8817-d25d7b7cc5bd
+# ╟─32acfdf0-ecb6-4acb-904f-d7b963771d6d
+# ╠═90ce17cc-d497-4605-aa62-be69343e03eb
+# ╟─ffcc35da-25b8-4bee-80d2-93b033584cd4
+# ╠═d1efb45b-44e4-4a6c-a967-0dc054a5ae83
+# ╠═781486fc-79b4-4e2e-9902-c29c3e4460b6
+# ╠═28e8dc7f-7841-4651-9119-de785086124a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

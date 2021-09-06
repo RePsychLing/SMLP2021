@@ -14,7 +14,7 @@ macro bind(def, element)
 end
 
 # ╔═╡ 74516f96-31f4-4c94-b963-fd4ed17eb758
-begin 
+begin
 	using Arrow
 	using CairoMakie
 	using DataFrames
@@ -61,7 +61,7 @@ begin
 		density!(axs, tdf.score)
 	end
 	fdensity
-end		
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
