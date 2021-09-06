@@ -6,7 +6,7 @@ Notebooks for "Advanced methods in frequentist statistics with Julia" as part of
 | Name            | GitHub                                   |
 |-----------------|------------------------------------------|
 | Phillip Alday   | [@palday](https://github.com/palday)     |
-| Douglas Bates   | [@dmates](https://github.com/dmbates)    |
+| Douglas Bates   | [@dmbates](https://github.com/dmbates)    |
 | Lisa DeBruine   | [@debruine](https://github.com/debruine) |
 | Reinhold Kliegl | [@kliegl](https://github.com/kliegl)     |
 
@@ -30,6 +30,8 @@ Approximate daily blocks/timeslots:
 | 4.    | Late Afternoon | 15:30 - 17:00 |   
 
 **NB: Precise timing may vary slightly depending on topic and participants' needs.** 
+
+We will be meeting via [Zoom](https://uni-potsdam.zoom.us/j/64170432269). For obvious reasons, we aren't posting the passcode here; please ask in the associated stream chat.
 
 Slots are filled with one of five "modules" dealing with  
 
@@ -95,3 +97,25 @@ We will start the summer school with chats in the zoomApp probably in late Augus
 The code and notebooks we use in teaching this course (and potentially some we don't get a chance to use) are in this repository on GitHub. If you're comfortable using git, great! If you're not, then using a graphical interface (such as the one provided by [GitHub](https://desktop.github.com/) or [SourceTree](https://www.sourcetreeapp.com/)) will make your life easier at first. We really recommend becoming comfortable with at least the basics of version control with git + GitHub (or GitLab, if that's your or your institute's preferred hosting website). Version control makes reproducible science a lot easier, and it is also a convenient mechanism for us, the instructors to continuously add to and revise the course materials based on your feedback and immediately distribute those changes to you.
 
 You can also view a statically rendered version of the notebooks [here](https://repsychling.github.io/SMLP2021/). Each notebook also contains a link in the upper left hand corner showing you how to run the notebook on your own computer. Note that normal Julia scripts, i.e. code that we don't put into notebooks, will not be available through this route.
+
+If you're starting Pluto from your local Julia REPL (make sure that you've `add`ed it as discussed above), you'll see something like this:
+
+```julia
+               _         
+   _       _ _(_)_     |  Documentation: https://docs.julialang.org
+  (_)     | (_) (_)    |                                                                       
+   _ _   _| |_  __ _   |  Type "?" for help, "]?" for Pkg help.
+  | | | | | | |/ _` |  |                                                                       
+  | | |_| | | | (_| |  |  Version 1.6.2 (2021-07-14)
+ _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org/ release
+|__/                   |                    
+                                               
+julia> using Pluto; Pluto.run()             
+                                               
+Go to http://localhost:1234/?secret=YaQMOJKJ in your browser to start writing ~ have fun!
+                                               
+Press Ctrl+C in this terminal to stop Pluto 
+
+```
+
+On most platforms, your browser should automatically a tab with the Pluto.

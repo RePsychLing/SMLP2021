@@ -27,10 +27,7 @@ end
 md"""
 # Mixed Models Tutorial: Basics
 
-Ths script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). 
-Physical fitness in third grade of primary school: 
-A mixed model analysis of 108,295 children and 515 schools.
-
+Ths script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). Age and sex effects in physical fitness components of 108,295 third graders including 515 primary schools and 9 cohorts. [Scientific Reports 11:17566](https://rdcu.be/cwSeR)
 To circumvent delays associated with model fitting we work with models that are less complex than those in the reference publication. All the data to reproduce the models in the publication are used here, too; the script requires only a few changes to specify the more complex models in the paper. 
 
 The script is structured in three main sections: 
@@ -162,46 +159,14 @@ end
 # ╔═╡ eea9c588-f5f8-4905-8774-7031162f9be0
 md"""
 #### 1.3.3 Figure 
-Assemble the facet plot -- still a bit of a hack, but getting there. 
 """
 
 # ╔═╡ 1f6446cc-8b40-4cec-880c-3318f78a56f8
+
 begin
-				# create the figure and panels (axes) within the figure
-	fTest = Figure(resolution = (1000, 600))
-	faxs =  [Axis(fTest[1, i]) for i in eachindex(comp_names)]
-				# iterate over the test labels in the desired order
-	for (i, test_names) in enumerate(last.(comp_names))
-			    # create the label in a box at the top
-		Box(fTest[1, i, Top()], backgroundcolor = :gray)
-    	Label(fTest[1, i, Top()], test_names, padding = (5, 5, 5, 5))
-				# split the subdataframe by sex to plot the points
-		for df in groupby(df[(Test = test_names,)], :Sex)
-			scatter!(
-				faxs[i],
-				df.ageM,				
-				df.zScore,
-				color=ifelse(first(df.Sex) == "Boys", :blue, :red),
-				label=first(df.Sex))
-		end
-	end
-	for j in 1:2
-	for i in 1:5
-		local y
-		y = lms.GM[i+5*(j-1)] .+ lms.age[i+5*(j-1)] .* [8.0, 9.1]
-		lines!(faxs[i], [8.0, 9.1], y, 
-			   color=ifelse(j == 1, :blue, :red),
-			   linewidth = 4)
-	end
-	end
-	axislegend(faxs[1], position = :lt)  # only one legend for point colors
-	faxs[3].xlabel = "Age"               # only one x-axis label
-    faxs[1].ylabel = "zScore [+/- SD]"   # only one y-axis label 
-	hideydecorations!.(faxs[2:end], grid = false)  # y labels on leftmost panel only
-	linkaxes!(faxs...)                   # use the same axes throughout
-	colgap!(fTest.layout, 10)            # tighten the spacing between panels
-	
-	fTest
+	design = mapping(:age, :zScore; color = :Sex, col = :Test)
+	lines = design * linear()
+	data(dat) * lines |> draw
 end
 
 # ╔═╡ a41bc417-3ca7-4f14-be88-5a91d236e88f
@@ -213,6 +178,13 @@ run test), _Coordination_ = star-run test, _Speed_ = 20-m linear sprint test,
 _PowerLOW_ = power of lower limbs (i.e., standing long jump test), _PowerUP_ = 
 apower of upper limbs (i.e., ball push test), SD = standard deviation. Points 
 are binned observed child means; lines are simple regression fits to the observations.
+"""
+
+# ╔═╡ 1ef832af-6226-45ac-97ee-2cbd5b67600a
+md"""
+#### 1.3.4 To be done
++ Move legend into plot; drop legend title
++ Add means of binned age groups from df
 """
 
 # ╔═╡ c6c6f056-b8b9-4190-ac14-b900bafa04df
@@ -2114,6 +2086,7 @@ version = "3.5.0+0"
 # ╟─eea9c588-f5f8-4905-8774-7031162f9be0
 # ╠═1f6446cc-8b40-4cec-880c-3318f78a56f8
 # ╟─a41bc417-3ca7-4f14-be88-5a91d236e88f
+# ╟─1ef832af-6226-45ac-97ee-2cbd5b67600a
 # ╟─c6c6f056-b8b9-4190-ac14-b900bafa04df
 # ╠═c5326753-a03b-4739-a82e-90ffa7c1ebdb
 # ╟─f7d6782e-dcd3-423c-a7fe-c125d8e4f810
