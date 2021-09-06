@@ -31,6 +31,8 @@ Approximate daily blocks/timeslots:
 
 **NB: Precise timing may vary slightly depending on topic and participants' needs.** 
 
+We will be meeting via [Zoom](https://uni-potsdam.zoom.us/j/64170432269). For obvious reasons, we aren't posting the passcode here; please ask in the associated stream chat.
+
 Slots are filled with one of five "modules" dealing with  
 
 |Module| Topic |
