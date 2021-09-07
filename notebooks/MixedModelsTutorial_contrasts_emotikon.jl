@@ -13,7 +13,7 @@ begin
 	using CSV
 	using DataFrames
 	using MixedModels
-	using RCall 
+	using RData
 	using Statistics
 	using StatsBase
 end
@@ -79,7 +79,7 @@ md"""
 """
 
 # ╔═╡ bea880a9-0513-4b70-8a72-af73fb83bd19
-dat = rcopy(R"readRDS('./data/EmotikonSubset.rds')");
+dat = load("data/EmotikonSubset.rds");
 
 # ╔═╡ f51a7baf-a68e-4fae-b62d-9adfbf2b3412
 md"""
@@ -486,7 +486,7 @@ CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
-RCall = "6f49c342-dc21-5d91-9882-a32aef131414"
+RData = "df47a6cb-8c03-5eed-afd8-b6050d6c41da"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
@@ -497,7 +497,7 @@ CSV = "~0.8.5"
 CairoMakie = "~0.6.5"
 DataFrames = "~1.2.2"
 MixedModels = "~4.1.1"
-RCall = "~0.13.12"
+RData = "~0.8.3"
 StatsBase = "~0.33.10"
 """
 
@@ -695,12 +695,6 @@ version = "3.34.0"
 [[CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-
-[[Conda]]
-deps = ["JSON", "VersionParsing"]
-git-tree-sha1 = "299304989a5e6473d985212c28928899c74e9421"
-uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
-version = "1.5.2"
 
 [[Contour]]
 deps = ["StaticArrays"]
@@ -1406,11 +1400,11 @@ git-tree-sha1 = "12fbe86da16df6679be7521dfb39fbc861e1dc7b"
 uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 version = "2.4.1"
 
-[[RCall]]
-deps = ["CategoricalArrays", "Conda", "DataFrames", "DataStructures", "Dates", "Libdl", "Missings", "REPL", "Random", "Requires", "StatsModels", "WinReg"]
-git-tree-sha1 = "80a056277142a340e646beea0e213f9aecb99caa"
-uuid = "6f49c342-dc21-5d91-9882-a32aef131414"
-version = "0.13.12"
+[[RData]]
+deps = ["CategoricalArrays", "CodecZlib", "DataFrames", "Dates", "FileIO", "Requires", "TimeZones", "Unicode"]
+git-tree-sha1 = "19e47a495dfb7240eb44dc6971d660f7e4244a72"
+uuid = "df47a6cb-8c03-5eed-afd8-b6050d6c41da"
+version = "0.8.3"
 
 [[REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -1649,17 +1643,6 @@ deps = ["REPL"]
 git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
 uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
 version = "0.4.1"
-
-[[VersionParsing]]
-git-tree-sha1 = "80229be1f670524750d905f8fc8148e5a8c4537f"
-uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
-version = "1.2.0"
-
-[[WinReg]]
-deps = ["Test"]
-git-tree-sha1 = "808380e0a0483e134081cc54150be4177959b5f4"
-uuid = "1b915085-20d7-51cf-bf83-8f477d6f5128"
-version = "0.3.1"
 
 [[WoodburyMatrices]]
 deps = ["LinearAlgebra", "SparseArrays"]
