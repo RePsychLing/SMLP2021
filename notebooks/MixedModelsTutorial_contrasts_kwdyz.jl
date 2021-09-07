@@ -29,7 +29,7 @@ md"""
 # ╔═╡ 28c37807-b83f-4c3e-848d-a7401b4eda29
 md"""
 ## Example data
-We take the `KWDYZ` dataset (Kliegl et al., 2011; Frontiers). This is an experiment looking at three effects of visual cueing under four different cue-target relations (CTRs). Two horizontal rectangles are displayed above and below a central fixation point or they displayed in vertical orientation to the left and right of the fixation point.  Subjects react to the onset of a small visual target occuring at one of the four ends of the two rectangles. The target is cued validly on 70% of trials by a brief flash of the corner of the rectangle at which it appears; it is cued invalidly at the three other locations 10% of the trials each. 
+We take the `KWDYZ` dataset ([Kliegl et al., 2011; Frontiers](https://doi.org/10.3389/fpsyg.2010.00238)). This is an experiment looking at three effects of visual cueing under four different cue-target relations (CTRs). Two horizontal rectangles are displayed above and below a central fixation point or they displayed in vertical orientation to the left and right of the fixation point.  Subjects react to the onset of a small visual target occuring at one of the four ends of the two rectangles. The target is cued validly on 70% of trials by a brief flash of the corner of the rectangle at which it appears; it is cued invalidly at the three other locations 10% of the trials each. 
 
 We specify three contrasts for the four-level factor CTR that are derived from spatial, object-based, and attractor-like features of attention. They map onto sequential differences between appropriately ordered factor levels. Interestingly, a different theoretical perspective, derived from feature overlap, leads to a different set of contrasts. Can the results refute one of the theoretical perspectives?
 
@@ -38,25 +38,18 @@ We also have a dataset from a replication and extension of this study (Kliegl, K
 ## Preprocessing
 """
 
-# ╔═╡ 8ec41516-4609-489e-9a84-f5f5a2d9fc51
+# ╔═╡ ccf701bb-cf16-4339-bd93-64ffe87435bb
 begin
-	dat1 = @chain begin
-		only(values(load("./data/KWDYZ.rda")))     # .rda -> Dict{String,Any}
-		select(:subj => :Subj, :tar => :CTR, :rt)
-        transform(:CTR => (v -> levels!(v, ["val", "sod", "dos", "dod"])) => :CTR)
-	end
-	
+	R"load('./data/KWDYZ.rda')"
+	R"saveRDS(KWDYZ, file='./data/KWDYZ.rds')"
+	dat1 = rcopy(R"readRDS('./data/KWDYZ.rds')");
+	dat1 = select(dat1, :subj => :Subj, :tar => :CTR, :rt);
+
 	# Descriptive statistics
 	cellmeans = combine(groupby(dat1, [:CTR]), 
                              :rt => mean, :rt  => std, :rt => length, 
                              :rt => (x -> std(x)/sqrt(length(x))) => :rt_semean)
-
-
-	OM, GM = mean(dat1.rt), mean(cellmeans.rt_mean)
 end
-
-# ╔═╡ d5a246f0-b172-4a67-828a-74fd58853de5
-cellmeans
 
 # ╔═╡ cb63bd4b-5f0e-49d1-a257-2b83c1687975
 md"""## SeqDiffCoding 
@@ -1676,8 +1669,7 @@ version = "3.5.0+0"
 # ╟─09a33b05-568e-427a-bd66-812d271d1791
 # ╠═7a3de02b-c423-496e-bf92-9981d71e5eab
 # ╟─28c37807-b83f-4c3e-848d-a7401b4eda29
-# ╠═8ec41516-4609-489e-9a84-f5f5a2d9fc51
-# ╠═d5a246f0-b172-4a67-828a-74fd58853de5
+# ╠═ccf701bb-cf16-4339-bd93-64ffe87435bb
 # ╟─cb63bd4b-5f0e-49d1-a257-2b83c1687975
 # ╠═8ffba70f-fc97-47a2-b973-3c0f2047eb9b
 # ╟─4e9359a3-2533-4ce8-b2fd-26411e84f59c
