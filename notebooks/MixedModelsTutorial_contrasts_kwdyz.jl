@@ -247,7 +247,7 @@ begin
 	X_2 <- MASS::fractions(t(X[,2:12])) # transpose; we don't need the intercept 		column
 """
 
-X_2 = @rget X_2;
+X_2 = rcopy(R"X_2");
 cntr7 = Dict(:CTR => HypothesisCoding(X_2))
 end
 
