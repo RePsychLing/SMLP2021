@@ -161,7 +161,7 @@ We can check the number of results by grouping on `:Child` and evaluate the numb
 """
 
 # ╔═╡ f5fa1b72-03dd-410c-8bd0-781b2f35ac21
-nobsChild = combine(groupby(Score, :Child), nrow => :n)
+nobsChild = combine(groupby(Score, :Child), nrow => :ntest)
 
 # ╔═╡ 3add8473-67d4-4036-ab90-624c44400e19
 md"""
@@ -169,7 +169,7 @@ Now create a table of the number of children with 1, 2, ..., 5 test scores.
 """
 
 # ╔═╡ 0610652f-a9d7-4bfc-ab45-1f00e641f304
-combine(groupby(nobsChild, :n), nrow)
+combine(groupby(nobsChild, :ntest), nrow)
 
 # ╔═╡ 2a4de9db-d915-4b0f-a877-5630c89242ea
 md"""
@@ -181,7 +181,7 @@ Later we can group the table according to this `:n` to look at properties of `:C
 """
 
 # ╔═╡ d4171fc7-37b6-41e6-9221-198eb3d6f2b1
-gdf = groupby(disallowmissing!(leftjoin(Child, nobsChild; on=:Child)), :n)
+gdf = groupby(disallowmissing!(leftjoin(Child, nobsChild; on=:Child)), :ntest)
 
 # ╔═╡ 4c01d638-62ae-4039-b60a-538b794a6fd6
 md"""
@@ -189,16 +189,15 @@ Are the sexes represented more-or-less equally?
 """
 
 # ╔═╡ 3b409f81-dbe5-4ce9-9eff-3f851e1052dc
-combine(groupby(first(gdf), :Sex), nrow => :n)
+combine(groupby(first(gdf), :Sex), nrow => :nchild)
+
+# ╔═╡ 49ca785c-9d93-4fa1-ae8d-84230474b9bf
+combine(groupby(last(gdf), :Sex), nrow => :nchild)
 
 # ╔═╡ ebb043df-3d32-4dfa-81f4-3691b24b3375
 md"""
 What about the distribution of ages?
 """
-
-# ╔═╡ 5d4034f3-5066-4a61-9ea2-aef719f9058e
-# ridge plot or faceting here please
-data(parent(gdf)) * mapping(:age => "Age [yr]", col=:n) * density()  |> draw
 
 # ╔═╡ d9a2a765-c10c-430d-9387-e57aee903860
 """
@@ -259,7 +258,7 @@ See [ridgeplot!](@ref).
 ridgeplot(args...; kwargs...) = ridgeplot!(Figure(), args...; kwargs...)
 
 # ╔═╡ f4131214-5497-476a-bb69-a8cb3e44f110
-ridgeplot(parent(gdf), :age, :n)
+ridgeplot(parent(gdf), :age, :ntest)
 
 # ╔═╡ e3392b0f-be3e-47c1-9bb9-362cb55e8421
 parent(gdf)
@@ -288,6 +287,12 @@ nrow(fggk21)
 
 # ╔═╡ 74ae3211-5198-421d-a791-2f43c2af6368
 R"names(fggk21)"
+
+# ╔═╡ 9df9c203-6e19-49c8-9bf1-219abd2fd7fa
+R"library(tibble)"
+
+# ╔═╡ 2f9f2910-3805-4a4e-95f9-6991f76ea051
+R"glimpse(fggk21)"
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -901,7 +906,7 @@ uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.36.0+0"
 
 [[LinearAlgebra]]
-deps = ["Libdl"]
+deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[Loess]]
@@ -1027,6 +1032,10 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "7937eda4681660b4d6aeeecc2f7e1c81c8ee4e2f"
 uuid = "e7412a2a-1a6e-54c0-be00-318e2571c051"
 version = "1.3.5+0"
+
+[[OpenBLAS_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
+uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 
 [[OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1486,6 +1495,10 @@ git-tree-sha1 = "5982a94fcba20f02f42ace44b9894ee2b140fe47"
 uuid = "0ac62f75-1d6f-5e53-bd7c-93b484bb37c0"
 version = "0.15.1+0"
 
+[[libblastrampoline_jll]]
+deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
+uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+
 [[libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
@@ -1556,8 +1569,8 @@ version = "3.5.0+0"
 # ╠═d4171fc7-37b6-41e6-9221-198eb3d6f2b1
 # ╟─4c01d638-62ae-4039-b60a-538b794a6fd6
 # ╠═3b409f81-dbe5-4ce9-9eff-3f851e1052dc
+# ╠═49ca785c-9d93-4fa1-ae8d-84230474b9bf
 # ╟─ebb043df-3d32-4dfa-81f4-3691b24b3375
-# ╠═5d4034f3-5066-4a61-9ea2-aef719f9058e
 # ╠═d9a2a765-c10c-430d-9387-e57aee903860
 # ╠═557e91e3-a41c-4e85-9266-cb98d68c2134
 # ╠═b4468f1c-aa33-43ab-929a-70d70e1c4e1d
@@ -1569,5 +1582,7 @@ version = "3.5.0+0"
 # ╠═ffb098b0-b5f0-4a73-9de7-5a5a0402eeec
 # ╠═70fd4c03-9ad0-4235-922b-4d6854b05484
 # ╠═74ae3211-5198-421d-a791-2f43c2af6368
+# ╠═9df9c203-6e19-49c8-9bf1-219abd2fd7fa
+# ╠═2f9f2910-3805-4a4e-95f9-6991f76ea051
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
