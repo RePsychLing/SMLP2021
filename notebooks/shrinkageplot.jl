@@ -166,7 +166,9 @@ md"""
 
 ## Shrinkage and zerocorr
 
-Note that the shrinkage for these plots is much more like "city-block" directions: relatively little diagonal movement, but you can collapse in the purely vertical or purely horizontal direction.
+Note that the shrinkage for these plots is much more like "city-block" directions: relatively little diagonal movement, but you can collapse in the purely vertical or purely horizontal direction. In some sense, losing the ability to shrink at an angle makes shrinkage less efficient, but it also greatly reduces model complexit.
+
+John Kruschke also has [a nice demonstration of this](https://doingbayesiandataanalysis.blogspot.com/2019/07/shrinkage-in-hierarchical-models-random.html) using the comparable functionality from lme4.
 
 """
 
