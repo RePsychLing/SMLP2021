@@ -82,7 +82,7 @@ The defining property of a linear model or linear mixed model is that the fitted
 """
 
 # ╔═╡ d8453ffc-cabf-44b5-9066-65f2502c12ad
-m1.X * m1.β + first(m1.reterms) * vec(first(m1.b))
+m1.X * m1.β + only(m1.reterms) * vec(only(m1.b))
 
 # ╔═╡ 3a879484-b1ff-4ae8-8db4-6e17e5e073c8
 fitted(m1)   # just to check that these are indeed the same as calculated above
@@ -143,7 +143,7 @@ The way that I read the first form is
 So the only things that differ in the distributions of the $y_i$'s are the means and they are determined by this linear predictor, $\eta = \bf X\beta+Zb$.
 ## Generalized Linear Mixed Models
 Consider first a GLMM for a vector, $\bf y$, of binary (i.e. yes/no) responses.
-The probability model for the conditional distribution $\mathcal Y|\mathcal B=\bf b$ consists of independent [Bernoulli distributions](https://en.wikipedia.org/wiki/Bernoulli_distribution) where the mean, $\mu_i$, for the i'th response is again determined by a *linear predictor*, $\eta = \bf X\beta+Zb$.
+The probability model for the conditional distribution $\mathcal Y|\mathcal B=\bf b$ consists of independent [Bernoulli distributions](https://en.wikipedia.org/wiki/Bernoulli_distribution) where the mean, $\mu_i$, for the i'th response is again determined by the i'th element of a *linear predictor*, $\eta = \bf X\beta+Zb$.
 
 However, in this case we will run into trouble if we try to make $\mu=\eta$ because $\mu_i$ is the probability of "success" for the i'th response and must be between 0 and 1.  We can't guarantee that the i'th component of $\eta$ will be between 0 and 1.  To get around this problem we apply a transformation to take $\eta_i$ to $\mu_i$.
 For historical reasons this transformation is called the *inverse link*, written $g^{-1}$, and the opposite transformation - from the probability scale to an unbounded scale - is called the *link*, g.
@@ -161,7 +161,16 @@ and the canonical inverse link is the *logistic*
 ```
 This is why fitting a binary response is sometimes called *logistic regression*.
 
-The probability model for a Generalized Linear Mixed Model (GLMM) is
+For later use we define a Julia `logistic` function.
+See [this presentation](https://github.com/dmbates/JSM2021/blob/main/notebooks/2compilation.jl) for more information than you could possible want to know on how Julia converts code like this to run on the processor.
+"""
+
+# ╔═╡ 7d836c30-f099-4bae-921c-f5a9cf57c5cc
+logistic(η) = inv(one(η) + exp(-η))
+
+# ╔═╡ 7390872e-9c9a-4d77-9f59-bdc7d9e29ab5
+md"""
+To reiterate, the probability model for a Generalized Linear Mixed Model (GLMM) is
 ```math
 \begin{aligned}
   (\mathcal{Y} | \mathcal{B}=\bf{b}) &\sim\mathcal{D}(\bf{g^{-1}(X\beta + Z b)},\phi)\\\\
@@ -169,7 +178,7 @@ The probability model for a Generalized Linear Mixed Model (GLMM) is
 \end{aligned}
 ```
 where $\mathcal{D}$ is the distribution family (such as Bernoulli or Poisson), $g^{-1}$ is the inverse link and $\phi$ is a scale parameter for $\mathcal{D}$ if it has one.
-The important cases of the Bernoulli and Poisson distributions don't have a scale parameter - once you know the mean you know everything you need to know about the distribution.
+The important cases of the Bernoulli and Poisson distributions don't have a scale parameter - once you know the mean you know everything you need to know about the distribution. (For those following the presentation, [this poem](https://www.poetryfoundation.org/poems/44477/ode-on-a-grecian-urn) by John Keats is the one with the couplet "Beauty is truth, truth beauty - that is all ye know on earth and all ye need to know.")
 
 ### An example of a Bernoulli GLMM
 
@@ -179,18 +188,24 @@ The `contra` dataset in the `MixedModels` package is from a survey on the use of
 # ╔═╡ a6553206-8116-49a5-8994-0fc7f3c6e2cd
 contra = DataFrame(MixedModels.dataset(:contra))
 
+# ╔═╡ cae81515-4a9c-44f9-a24e-3d5f08c7933c
+combine(groupby(contra, :dist), nrow)
+
 # ╔═╡ 57bc6bbf-e4e4-4abc-960e-3e89e9312d66
 md"""
-The information recorded included woman's age, the number of live children she had, whether she lived in an urban or rural setting, and the political district in which she lived.
+The information recorded included woman's age, the number of live children she has, whether she lives in an urban or rural setting, and the political district in which she lives.
 
 The age was centered.
 Unfortunately, the version of the data to which I had access did not record what the centering value was.
 
-A data plot (to be added later) shows that the probability of contraception use is **not** linear in `age` - it is low for younger women, higher for women in the middle of the range (assumed to be women in late 20's to early 30's) and low again for older women (late 30's to early 40's in this survey).
+A data plot, drawn using `lattice` graphics in `R`, shows that the probability of contraception use is **not** linear in `age` - it is low for younger women, higher for women in the middle of the range (assumed to be women in late 20's to early 30's) and low again for older women (late 30's to early 40's in this survey).
 
 If we fit a model with only the `age` term in the fixed effects, that term will not be significant.
 This doesn't mean that there is no "age effect", it only means that there is no significant linear effect for `age`.
 """
+
+# ╔═╡ b7a9dadc-b95e-4abc-89d1-e9dff22e0a40
+Resource("https://github.com/RePsychLing/SMLP2021/blob/main/notebooks/contra.svg?raw=true")
 
 # ╔═╡ f850d266-934c-400b-9f20-a848f08513de
 gm1 = fit(MixedModel,
@@ -198,6 +213,7 @@ gm1 = fit(MixedModel,
 	contra,
 	Bernoulli();   # will use the canonical link
 	nAGQ=9,        # use a more compute-intensive evaluation of the deviance
+	contrasts=Dict(:dist => Grouping(), :urban => HelmertCoding()),
 )
 
 # ╔═╡ 19f94d31-9321-440b-87e4-f2b488a5c6ca
@@ -205,9 +221,12 @@ md"""
 Notice that the linear term for `age` is not significant but the quadratic term for `age` is highly significant.
 We usually retain the lower order term, even if it is not significant, if the higher order term is significant.
 
-Notice that the parameter estimates for the treatment contrasts for `livch` are similar.
-Thus the distinction of 1, 2, or 3 or more childen is not as important as the contrast between having any children and not having any.
+Notice also that the parameter estimates for the treatment contrasts for `livch` are similar.
+Thus the distinction of 1, 2, or 3+ childen is not as important as the contrast between having any children and not having any.
 Those women who already have children are more likely to use artificial contraception.
+
+Furthermore, the women without children have a different probability vs age profile than the women with children.
+To allow for this we define a binary `children` factor and incorporate an `age&children` interaction.
 """
 
 # ╔═╡ f0d0fc9c-f817-4f3c-99de-c2442126509b
@@ -218,9 +237,7 @@ md"""
 Notice that there is no "residual" variance being estimated.
 This is because the Bernoulli distribution doesn't have a scale parameter.
 
-The standard deviation for district is quite large.
-Part of the variation being absorbed here is from urban/rural distinctions within district.
-It turns out that a better way of dividing the population is by the combination of district and urban/rural.
+### Reducing the levels of `livch` to `no children` versus `children`.
 """
 
 # ╔═╡ d68d3d90-3584-4d70-9d83-d203ba28049c
@@ -229,14 +246,16 @@ It turns out that a better way of dividing the population is by the combination 
 # ╔═╡ 63610f52-5067-4754-a86b-675711c4f36a
 gm2 = fit(
 	MixedModel,
-	@formula(use ~ 1 + age + abs2(age) + children + urban + (1|dist&urban)),
+	@formula(use ~ 1 + age*children + abs2(age) + children + urban + (1|dist)),
 	contra,
 	Bernoulli();
 	nAGQ=9,
+	contrasts=Dict(
+		:dist => Grouping(),
+		:urban => HelmertCoding(),
+		:children => HelmertCoding(),
+	),
 )
-
-# ╔═╡ f1ab41a4-44f9-4f34-81e8-668a72b0f915
-geomdof(gm::GeneralizedLinearMixedModel) = sum(leverage(gm.LMM))
 
 # ╔═╡ 3e8a4b2e-4996-4756-9932-93fbc3efb3e6
 let
@@ -244,7 +263,6 @@ let
 	DataFrame(
 		model=[:gm2,:gm1],
 		npar=dof.(mods),
-		geomdof=geomdof.(mods),
 		deviance=deviance.(mods),
 		AIC=aic.(mods),
 		BIC=bic.(mods),
@@ -252,12 +270,105 @@ let
 	)
 end
 
+# ╔═╡ f16be61e-3b9b-40ba-b109-8e46d3af5298
+md"""
+Because these models are not nested, we cannot do a likelihood ratio test.
+Nevertheless we see that the deviance is much lower in the model with `age & children` even though the 3 levels of `livch` have been collapsed into a single level of `children`.
+There is a substantial decrease in the deviance even though there are fewer parameters in model `gm2` than in `gm1`.
+This decrease is because the flexibility of the model - its ability to model the behavior of the response - is being put to better use in `gm2` than in `gm1`.
+
+At present the calculation of the `geomdof` as `sum(influence(m))` is not correctly defined in our code for a GLMM so we need to do some more work before we can examine those values.
+"""
+
+# ╔═╡ f83aaa94-4620-41f2-8f61-893593aecb61
+md"""
+### Using `urban&dist` as a grouping factor
+
+It turns out that there can be more difference between urban and rural settings within the same political district than there is between districts.
+To model this difference we build a model with `urban&dist` as a grouping factor.
+"""
+
+# ╔═╡ 3b582cbb-f7e1-42bf-aa8d-abfa96342a32
+gm3 = fit(
+	MixedModel,
+	@formula(use ~ 1 + age*children + abs2(age) + children + urban + (1|urban&dist)),
+	contra,
+	Bernoulli();
+	nAGQ=9,
+	contrasts=Dict(
+		:dist => Grouping(),
+		:urban => HelmertCoding(),
+		:children => HelmertCoding(),
+	),
+)
+
+# ╔═╡ dc7f19bc-a6fe-4d3c-8e78-1426aa6081e7
+begin
+	using Effects
+	design = Dict(:children => [true, false], :urban => ["Y", "N"], :age => [0.0])
+	preds = effects(design, gm3)
+end
+
+# ╔═╡ 77e2e52d-6133-4631-9675-d6db1f079ead
+let
+	mods = [gm3, gm2, gm1]
+	DataFrame(
+		model=[:gm3, :gm2,:gm1],
+		npar=dof.(mods),
+		deviance=deviance.(mods),
+		AIC=aic.(mods),
+		BIC=bic.(mods),
+		AICc=aicc.(mods),
+	)
+end
+
+# ╔═╡ 179ee9eb-020b-4f63-8699-bd1a0368e6e9
+md"""
+Notice that the parameter count in `gm3` is the same as that of `gm2` - the thing that has changed is the number of levels of the grouping factor- resulting in a much lower deviance for `gm3`.
+This reinforces the idea that a simple count of the number of parameters to be estimated does not always reflect the complexity of the model.
+"""
+
+# ╔═╡ 73332322-ffc9-4e83-9f7e-94b726405c97
+with_terminal() do
+	show(gm2)
+	println()
+	show(gm3)
+end
+
+# ╔═╡ aa274ce1-0d31-4701-a967-7d7889b2ac38
+md"""
+The coefficient for `age` may be regarded as insignificant but we retain it for two reasons: we have a term of `age²` (written `abs2(age)`) in the model and we have a significant interaction `age & children` in the model.
+"""
+
+# ╔═╡ 7204cac6-fad2-4ccf-86ff-2d91c426c6c6
+md"""
+### Predictions for some subgroups
+For a "typical" district (random effect near zero) the predictions on the linear predictor scale for a woman whose age is near the centering value (i.e. centered age of zero) are:
+"""
+
+# ╔═╡ b74f0e46-1046-4f44-8c0b-235351251e86
+md"Converting these η values to probabilities yields"
+
+# ╔═╡ f2fd5625-cab1-4ce2-8592-f6215ea65b86
+logistic.(preds.use)
+
+# ╔═╡ 0a3351b2-7e1c-45bb-97a7-05bc7be4826f
+md"""
+## Summarizing the results
+
+- From the data plot we can see a quadratic trend in the probability by age.
+- The patterns for women with children are similar and we do not need to distinguish between 1, 2, and 3+ children.
+- We do distinguish between those women who do not have children and those with children.  This shows up in a signficant `age & children` interaction term.
+
+"""
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Effects = "8f03c58b-bd97-4933-a826-f71b64d2cca2"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
 MixedModelsMakie = "b12ae82c-6730-437f-aff9-d2c38332a376"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
@@ -266,6 +377,7 @@ PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 CairoMakie = "~0.6.5"
 DataFrameMacros = "~0.1.0"
 DataFrames = "~1.2.2"
+Effects = "~0.1.2"
 MixedModels = "~4.1.1"
 MixedModelsMakie = "~0.3.8"
 PlutoUI = "~0.7.9"
@@ -520,6 +632,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "3f3a2501fa7236e9b911e0f7a588c657e822bb6d"
 uuid = "5ae413db-bbd1-5e63-b57d-d24a61df00f5"
 version = "2.2.3+0"
+
+[[Effects]]
+deps = ["DataFrames", "LinearAlgebra", "Statistics", "StatsBase", "StatsModels", "Tables"]
+git-tree-sha1 = "989a9cb80952d2d3d36bccbe7c0001fd9ef5dfa2"
+uuid = "8f03c58b-bd97-4933-a826-f71b64d2cca2"
+version = "0.1.2"
 
 [[EllipsisNotation]]
 deps = ["ArrayInterface"]
@@ -1509,15 +1627,30 @@ version = "3.5.0+0"
 # ╟─bce7177c-e4d9-4acf-9ac1-2ff8f244c038
 # ╠═8d2ae114-5780-4d38-ba40-95aac032337b
 # ╟─d90a8d29-afc8-470e-b5da-f35a4cadf1c5
+# ╠═7d836c30-f099-4bae-921c-f5a9cf57c5cc
+# ╟─7390872e-9c9a-4d77-9f59-bdc7d9e29ab5
 # ╠═a6553206-8116-49a5-8994-0fc7f3c6e2cd
+# ╠═cae81515-4a9c-44f9-a24e-3d5f08c7933c
 # ╟─57bc6bbf-e4e4-4abc-960e-3e89e9312d66
+# ╟─b7a9dadc-b95e-4abc-89d1-e9dff22e0a40
 # ╠═f850d266-934c-400b-9f20-a848f08513de
 # ╟─19f94d31-9321-440b-87e4-f2b488a5c6ca
 # ╠═f0d0fc9c-f817-4f3c-99de-c2442126509b
 # ╟─f02f0407-8e38-4cef-a509-18abd0594b3a
 # ╠═d68d3d90-3584-4d70-9d83-d203ba28049c
 # ╠═63610f52-5067-4754-a86b-675711c4f36a
-# ╠═f1ab41a4-44f9-4f34-81e8-668a72b0f915
 # ╠═3e8a4b2e-4996-4756-9932-93fbc3efb3e6
+# ╟─f16be61e-3b9b-40ba-b109-8e46d3af5298
+# ╟─f83aaa94-4620-41f2-8f61-893593aecb61
+# ╠═3b582cbb-f7e1-42bf-aa8d-abfa96342a32
+# ╠═77e2e52d-6133-4631-9675-d6db1f079ead
+# ╟─179ee9eb-020b-4f63-8699-bd1a0368e6e9
+# ╠═73332322-ffc9-4e83-9f7e-94b726405c97
+# ╠═aa274ce1-0d31-4701-a967-7d7889b2ac38
+# ╟─7204cac6-fad2-4ccf-86ff-2d91c426c6c6
+# ╠═dc7f19bc-a6fe-4d3c-8e78-1426aa6081e7
+# ╟─b74f0e46-1046-4f44-8c0b-235351251e86
+# ╠═f2fd5625-cab1-4ce2-8592-f6215ea65b86
+# ╟─0a3351b2-7e1c-45bb-97a7-05bc7be4826f
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

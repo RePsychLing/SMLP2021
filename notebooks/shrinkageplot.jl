@@ -55,6 +55,11 @@ VarCorr(m1)
 # ╔═╡ ce3279cb-0826-4894-a0f6-1b87d180f19f
 issingular(m1)   # notice that there is a correlation estimated as +1.00
 
+# ╔═╡ 176f301f-82b2-4bf8-9bfb-c43d309992b8
+with_terminal() do
+	show(m1)
+end
+
 # ╔═╡ b7aded62-7436-4bf6-8f71-5ea15316d98c
 md"""
 ## Expressing the covariance of random effects
@@ -99,6 +104,12 @@ The upper left panel shows the perfect negative correlation for those two compon
 
 # ╔═╡ 12a2f171-3b59-4c7a-9850-7675f80731e9
 shrinkageplot(m1, :item)
+
+# ╔═╡ 91edcf4f-b521-47a6-a969-172cab49c02c
+X1 = Int.(m1.X')
+
+# ╔═╡ b0e62409-65dc-4c95-a5e7-07a7b7696456
+X1*X1'
 
 # ╔═╡ fa5bf4f1-2e2c-4294-839c-c8990f99ff61
 md"""
@@ -161,36 +172,48 @@ DataFrame(shortestcovint(m3btstrp))
 # ╔═╡ d938bdac-163d-4c5a-8d03-d56f37495b20
 ridgeplot(m3btstrp)
 
-# ╔═╡ 68dbfe04-33aa-4a96-a4e0-030039c3c7a0
-md"""
+# ╔═╡ 4cd657ad-08b6-4651-b6da-be9e0fe2ee55
+ridgeplot(m3btstrp; show_intercept=false)
 
-## Shrinkage and `zerocorr`
-
-Note that the shrinkage for these plots is much more like "city-block" directions: relatively little diagonal movement, but you can collapse in the purely vertical or purely horizontal direction. In other words, you can collapse to a horzontal line, to a vertical line or to a center blob, but not a diagonal line when using `zerocorr`. In some sense, losing the ability to shrink at an angle makes shrinkage less efficient, but it also greatly reduces model complexit.
-
-John Kruschke also has [a nice demonstration of this](https://doingbayesiandataanalysis.blogspot.com/2019/07/shrinkage-in-hierarchical-models-random.html) using the comparable functionality from lme4.
-
-"""
-
-# ╔═╡ b40ef7ee-a08c-405d-9034-cbc8171e9758
-m1zc = fit(
+# ╔═╡ ad8aa19b-d99c-4743-b54c-0327a306f43e
+m4 = fit(
 	MixedModel,
-	@formula(rt_trunc~1+spkr*prec*load+zerocorr(1+spkr+prec+load|subj)+zerocorr(1+spkr+prec+load|item)),
+	@formula(rt_trunc~1+prec+spkr+load+(1+prec|item)+(1|subj)),
 	kb07;
 	contrasts = Dict(
 		:subj => Grouping(),
 		:item => Grouping(),
 		:spkr => HelmertCoding(),
-		:prec => HelmertCoding(),
+		:prec => HelmertCoding(levels=["maintain", "break"]),
 		:load => HelmertCoding(),
 	),
 )
 
-# ╔═╡ a2250c0b-e2e0-4634-9cc4-eed15e12a05e
-shrinkageplot(m1zc, :subj)
+# ╔═╡ 6aa80fc0-7524-4c9a-998b-de2fa05df173
+m4bstrp = parametricbootstrap(rng, 2000, m4);
 
-# ╔═╡ 266e0249-f0c3-4e96-a423-a1f7238d0b4c
-shrinkageplot(m1zc, :item)
+# ╔═╡ 40d4289b-e1a6-49ac-980b-bc8da76b8dbf
+ridgeplot(m4bstrp; show_intercept=false)
+
+# ╔═╡ 07e3043f-5a68-480f-be7c-fb1ecb82f07a
+DataFrame(shortestcovint(m4bstrp))
+
+# ╔═╡ 1c7c1077-d47f-4f94-b0f3-99bbade1e5a2
+VarCorr(m4)
+
+# ╔═╡ 37e6e2ed-bc71-40b9-be8f-afcbf16112d6
+let mods = [m1, m2, m4]
+	DataFrame(geomdof = (sum ∘ leverage).(mods),
+		npar = dof.(mods),
+		deviance = deviance.(mods),
+		AIC = aic.(mods),
+		BIC = bic.(mods),
+		AICc = aicc.(mods),
+	)
+end
+
+# ╔═╡ 37b704ff-2188-45a7-a513-1856ca357058
+scatter(fitted(m4), residuals(m4))
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -362,15 +385,15 @@ version = "3.14.0"
 
 [[ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
-git-tree-sha1 = "024fe24d83e4a5bf5fc80501a314ce0d1aa35597"
+git-tree-sha1 = "32a2b8af383f11cbb65803883837a149d10dfe8a"
 uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
-version = "0.11.0"
+version = "0.10.12"
 
 [[ColorVectorSpace]]
-deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "SpecialFunctions", "Statistics", "TensorCore"]
-git-tree-sha1 = "42a9b08d3f2f951c9b283ea427d96ed9f1f30343"
+deps = ["ColorTypes", "Colors", "FixedPointNumbers", "LinearAlgebra", "SpecialFunctions", "Statistics", "StatsBase"]
+git-tree-sha1 = "4d17724e99f357bfd32afa0a9e2dda2af31a9aea"
 uuid = "c3611d14-8923-5661-9e6a-0046d554d3a4"
-version = "0.9.5"
+version = "0.8.7"
 
 [[Colors]]
 deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
@@ -380,9 +403,9 @@ version = "0.12.8"
 
 [[Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "SHA", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
-git-tree-sha1 = "727e463cfebd0c7b999bbf3e9e7e16f254b94193"
+git-tree-sha1 = "6071cb87be6a444ac75fdbf51b8e7273808ce62f"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "3.34.0"
+version = "3.35.0"
 
 [[CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -498,9 +521,9 @@ version = "3.3.9+8"
 
 [[FileIO]]
 deps = ["Pkg", "Requires", "UUIDs"]
-git-tree-sha1 = "937c29268e405b6808d958a9ac41bfe1a31b08e7"
+git-tree-sha1 = "3c041d2ac0a52a12a27af2782b34900d9c3ee68c"
 uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
-version = "1.11.0"
+version = "1.11.1"
 
 [[FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -613,10 +636,10 @@ uuid = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
 version = "0.1.0"
 
 [[ImageCore]]
-deps = ["AbstractFFTs", "ColorVectorSpace", "Colors", "FixedPointNumbers", "Graphics", "MappedArrays", "MosaicViews", "OffsetArrays", "PaddedViews", "Reexport"]
-git-tree-sha1 = "595155739d361589b3d074386f77c107a8ada6f7"
+deps = ["AbstractFFTs", "Colors", "FixedPointNumbers", "Graphics", "MappedArrays", "MosaicViews", "OffsetArrays", "PaddedViews", "Reexport"]
+git-tree-sha1 = "db645f20b59f060d8cfae696bc9538d13fd86416"
 uuid = "a09fc81d-aa75-5fe9-8630-4744c3626534"
-version = "0.9.2"
+version = "0.8.22"
 
 [[ImageIO]]
 deps = ["FileIO", "Netpbm", "PNGFiles"]
@@ -830,9 +853,9 @@ version = "1.1.0"
 
 [[MathOptInterface]]
 deps = ["BenchmarkTools", "CodecBzip2", "CodecZlib", "JSON", "LinearAlgebra", "MutableArithmetics", "OrderedCollections", "Printf", "SparseArrays", "Test", "Unicode"]
-git-tree-sha1 = "debba84c7060716b0737504b59aabe976c9b91cb"
+git-tree-sha1 = "a1f9933fa00624d8c97301253d14710b80fa08ee"
 uuid = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
-version = "0.10.0"
+version = "0.10.1"
 
 [[MathProgBase]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -910,10 +933,10 @@ uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "0.3.5"
 
 [[Netpbm]]
-deps = ["FileIO", "ImageCore"]
-git-tree-sha1 = "18efc06f6ec36a8b801b23f076e3c6ac7c3bf153"
+deps = ["ColorVectorSpace", "FileIO", "ImageCore"]
+git-tree-sha1 = "09589171688f0039f13ebe0fdcc7288f50228b52"
 uuid = "f09324ee-3d7c-5217-9330-fc30815ba969"
-version = "1.0.2"
+version = "1.0.1"
 
 [[NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
@@ -1264,12 +1287,6 @@ version = "1.5.1"
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 
-[[TensorCore]]
-deps = ["LinearAlgebra"]
-git-tree-sha1 = "1feb45f88d133a655e001435632f019a9a1bcdb6"
-uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
-version = "0.1.1"
-
 [[Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -1435,6 +1452,7 @@ version = "3.5.0+0"
 # ╠═7b7c8944-033d-496d-9a55-21042f821a59
 # ╠═feea5c35-0ae3-412f-a735-26a3e8ddb71f
 # ╠═ce3279cb-0826-4894-a0f6-1b87d180f19f
+# ╠═176f301f-82b2-4bf8-9bfb-c43d309992b8
 # ╟─b7aded62-7436-4bf6-8f71-5ea15316d98c
 # ╠═628a384b-a3be-4419-9702-cde07d27d260
 # ╟─5ba2045d-3dc6-4c90-b400-65ef2ef263a8
@@ -1447,6 +1465,8 @@ version = "3.5.0+0"
 # ╠═de35bc38-fe98-4cd4-a93a-1148a70eb791
 # ╟─d7474323-fd59-4223-9990-b61b12215ef6
 # ╠═12a2f171-3b59-4c7a-9850-7675f80731e9
+# ╠═91edcf4f-b521-47a6-a969-172cab49c02c
+# ╠═b0e62409-65dc-4c95-a5e7-07a7b7696456
 # ╟─fa5bf4f1-2e2c-4294-839c-c8990f99ff61
 # ╠═bd2316c8-c292-448e-9fdb-ea55542b6090
 # ╠═2c65249d-3875-4a46-97f5-03aa21b7a901
@@ -1457,9 +1477,13 @@ version = "3.5.0+0"
 # ╠═39a8e036-5135-4950-9b75-b77da2e8cb39
 # ╠═2df25946-4335-4ebb-b4a8-c34bf8b59b09
 # ╠═d938bdac-163d-4c5a-8d03-d56f37495b20
-# ╟─68dbfe04-33aa-4a96-a4e0-030039c3c7a0
-# ╠═b40ef7ee-a08c-405d-9034-cbc8171e9758
-# ╠═a2250c0b-e2e0-4634-9cc4-eed15e12a05e
-# ╠═266e0249-f0c3-4e96-a423-a1f7238d0b4c
+# ╠═4cd657ad-08b6-4651-b6da-be9e0fe2ee55
+# ╠═ad8aa19b-d99c-4743-b54c-0327a306f43e
+# ╠═6aa80fc0-7524-4c9a-998b-de2fa05df173
+# ╠═40d4289b-e1a6-49ac-980b-bc8da76b8dbf
+# ╠═07e3043f-5a68-480f-be7c-fb1ecb82f07a
+# ╠═1c7c1077-d47f-4f94-b0f3-99bbade1e5a2
+# ╠═37e6e2ed-bc71-40b9-be8f-afcbf16112d6
+# ╠═37b704ff-2188-45a7-a513-1856ca357058
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
