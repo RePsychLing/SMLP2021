@@ -161,6 +161,37 @@ DataFrame(shortestcovint(m3btstrp))
 # ╔═╡ d938bdac-163d-4c5a-8d03-d56f37495b20
 ridgeplot(m3btstrp)
 
+# ╔═╡ 68dbfe04-33aa-4a96-a4e0-030039c3c7a0
+md"""
+
+## Shrinkage and `zerocorr`
+
+Note that the shrinkage for these plots is much more like "city-block" directions: relatively little diagonal movement, but you can collapse in the purely vertical or purely horizontal direction. In other words, you can collapse to a horzontal line, to a vertical line or to a center blob, but not a diagonal line when using `zerocorr`. In some sense, losing the ability to shrink at an angle makes shrinkage less efficient, but it also greatly reduces model complexit.
+
+John Kruschke also has [a nice demonstration of this](https://doingbayesiandataanalysis.blogspot.com/2019/07/shrinkage-in-hierarchical-models-random.html) using the comparable functionality from lme4.
+
+"""
+
+# ╔═╡ b40ef7ee-a08c-405d-9034-cbc8171e9758
+m1zc = fit(
+	MixedModel,
+	@formula(rt_trunc~1+spkr*prec*load+zerocorr(1+spkr+prec+load|subj)+zerocorr(1+spkr+prec+load|item)),
+	kb07;
+	contrasts = Dict(
+		:subj => Grouping(),
+		:item => Grouping(),
+		:spkr => HelmertCoding(),
+		:prec => HelmertCoding(),
+		:load => HelmertCoding(),
+	),
+)
+
+# ╔═╡ a2250c0b-e2e0-4634-9cc4-eed15e12a05e
+shrinkageplot(m1zc, :subj)
+
+# ╔═╡ 266e0249-f0c3-4e96-a423-a1f7238d0b4c
+shrinkageplot(m1zc, :item)
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -331,15 +362,15 @@ version = "3.14.0"
 
 [[ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
-git-tree-sha1 = "32a2b8af383f11cbb65803883837a149d10dfe8a"
+git-tree-sha1 = "024fe24d83e4a5bf5fc80501a314ce0d1aa35597"
 uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
-version = "0.10.12"
+version = "0.11.0"
 
 [[ColorVectorSpace]]
-deps = ["ColorTypes", "Colors", "FixedPointNumbers", "LinearAlgebra", "SpecialFunctions", "Statistics", "StatsBase"]
-git-tree-sha1 = "4d17724e99f357bfd32afa0a9e2dda2af31a9aea"
+deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "SpecialFunctions", "Statistics", "TensorCore"]
+git-tree-sha1 = "42a9b08d3f2f951c9b283ea427d96ed9f1f30343"
 uuid = "c3611d14-8923-5661-9e6a-0046d554d3a4"
-version = "0.8.7"
+version = "0.9.5"
 
 [[Colors]]
 deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
@@ -349,9 +380,9 @@ version = "0.12.8"
 
 [[Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "SHA", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
-git-tree-sha1 = "6071cb87be6a444ac75fdbf51b8e7273808ce62f"
+git-tree-sha1 = "727e463cfebd0c7b999bbf3e9e7e16f254b94193"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "3.35.0"
+version = "3.34.0"
 
 [[CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -467,9 +498,9 @@ version = "3.3.9+8"
 
 [[FileIO]]
 deps = ["Pkg", "Requires", "UUIDs"]
-git-tree-sha1 = "3c041d2ac0a52a12a27af2782b34900d9c3ee68c"
+git-tree-sha1 = "937c29268e405b6808d958a9ac41bfe1a31b08e7"
 uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
-version = "1.11.1"
+version = "1.11.0"
 
 [[FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -582,10 +613,10 @@ uuid = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
 version = "0.1.0"
 
 [[ImageCore]]
-deps = ["AbstractFFTs", "Colors", "FixedPointNumbers", "Graphics", "MappedArrays", "MosaicViews", "OffsetArrays", "PaddedViews", "Reexport"]
-git-tree-sha1 = "db645f20b59f060d8cfae696bc9538d13fd86416"
+deps = ["AbstractFFTs", "ColorVectorSpace", "Colors", "FixedPointNumbers", "Graphics", "MappedArrays", "MosaicViews", "OffsetArrays", "PaddedViews", "Reexport"]
+git-tree-sha1 = "595155739d361589b3d074386f77c107a8ada6f7"
 uuid = "a09fc81d-aa75-5fe9-8630-4744c3626534"
-version = "0.8.22"
+version = "0.9.2"
 
 [[ImageIO]]
 deps = ["FileIO", "Netpbm", "PNGFiles"]
@@ -799,9 +830,9 @@ version = "1.1.0"
 
 [[MathOptInterface]]
 deps = ["BenchmarkTools", "CodecBzip2", "CodecZlib", "JSON", "LinearAlgebra", "MutableArithmetics", "OrderedCollections", "Printf", "SparseArrays", "Test", "Unicode"]
-git-tree-sha1 = "a1f9933fa00624d8c97301253d14710b80fa08ee"
+git-tree-sha1 = "debba84c7060716b0737504b59aabe976c9b91cb"
 uuid = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
-version = "0.10.1"
+version = "0.10.0"
 
 [[MathProgBase]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -879,10 +910,10 @@ uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "0.3.5"
 
 [[Netpbm]]
-deps = ["ColorVectorSpace", "FileIO", "ImageCore"]
-git-tree-sha1 = "09589171688f0039f13ebe0fdcc7288f50228b52"
+deps = ["FileIO", "ImageCore"]
+git-tree-sha1 = "18efc06f6ec36a8b801b23f076e3c6ac7c3bf153"
 uuid = "f09324ee-3d7c-5217-9330-fc30815ba969"
-version = "1.0.1"
+version = "1.0.2"
 
 [[NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
@@ -1233,6 +1264,12 @@ version = "1.5.1"
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 
+[[TensorCore]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "1feb45f88d133a655e001435632f019a9a1bcdb6"
+uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
+version = "0.1.1"
+
 [[Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -1420,5 +1457,9 @@ version = "3.5.0+0"
 # ╠═39a8e036-5135-4950-9b75-b77da2e8cb39
 # ╠═2df25946-4335-4ebb-b4a8-c34bf8b59b09
 # ╠═d938bdac-163d-4c5a-8d03-d56f37495b20
+# ╟─68dbfe04-33aa-4a96-a4e0-030039c3c7a0
+# ╠═b40ef7ee-a08c-405d-9034-cbc8171e9758
+# ╠═a2250c0b-e2e0-4634-9cc4-eed15e12a05e
+# ╠═266e0249-f0c3-4e96-a423-a1f7238d0b4c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
