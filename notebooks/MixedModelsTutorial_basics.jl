@@ -706,6 +706,69 @@ shrinkageplot!(Figure(; resolution=(800,800)), m1, :School)
 # ╔═╡ 91db2051-b222-41c4-96c5-a2fa0c977bfa
 md" These are just teasers. We will pick this up in a separate tutorial. Enjoy! "
 
+# ╔═╡ a70fe575-51ce-45df-a0c0-12205a5efd88
+md"""
+## 4. PCA of Random Effect Structure
+### 4.1 Scores in RES
+"""
+
+# ╔═╡ 62596457-7439-4e55-8d18-f667b7871d21
+begin
+	f1cL = @formula zScore ~ 1 + Test*a1*Sex + (0+Test | Child)
+	m1cL = fit(MixedModel, f1cL, dat, contrasts=contr)
+	VarCorr(m1cL)
+end
+
+# ╔═╡ 3cf33a07-62b9-4068-9eea-1c04effe5716
+MixedModels.PCA(m1cL)
+
+# ╔═╡ a6d9ca11-21a3-40c8-9f32-9bbfdc773e49
+md"""
+### 4.2 Effects in RES
+"""
+
+# ╔═╡ d1fc5d61-caf3-4a21-ab8a-68586462a162
+begin
+	f1c = @formula zScore ~ 1 + Test*a1*Sex + (1+Test | Child)
+	m1c = fit(MixedModel, f1c, dat, contrasts=contr)
+	VarCorr(m1c)
+end
+
+# ╔═╡ e46ccadc-3f3c-4704-865f-740bb059ae19
+MixedModels.PCA(m1c)
+
+# ╔═╡ 4572b20e-19e2-45e8-ba45-d4eb55cd3f4a
+md"""
+## 5. Age x Sex nested in levels of test
+"""
+
+# ╔═╡ 1e2d0f82-5209-4406-85d4-a465b12515a7
+begin
+	f1LL_nested = @formula zScore ~ 0 + Test & (a1*Sex) +
+	(0+Test+a1+Sex | School) +  (0+Test | Child) + 
+	zerocorr(0+Test | Cohort);
+
+	m1LL_nested = fit(MixedModel, f1LL_nested, dat, contrasts=contr);
+    m1LL_nested
+end
+
+# ╔═╡ 81707893-f1fb-4062-b371-e352e01b28fc
+begin
+	f1LL = @formula zScore ~ 0 + Test*a1*Sex +
+	(0+Test+a1+Sex | School) +  (0+Test | Child) + 
+	zerocorr(0+Test | Cohort);
+
+	m1LL = fit(MixedModel, f1LL_nested, dat, contrasts=contr);
+	m1LL
+end
+
+# ╔═╡ 801ba580-31c5-4d04-8557-afa86586048f
+begin
+	mods2 = [m1LL_nested, m1LL];
+	gof_summary3 = DataFrame(dof=dof.(mods2), deviance=deviance.(mods2),
+	AIC = aic.(mods2), AICc = aicc.(mods2), BIC = bic.(mods2))
+end
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -2155,5 +2218,15 @@ version = "3.5.0+0"
 # ╠═b044860a-c571-4dcb-bc3c-d5b07fe58695
 # ╠═6754c267-0ea7-4369-97a8-dfce330ceed1
 # ╟─91db2051-b222-41c4-96c5-a2fa0c977bfa
+# ╟─a70fe575-51ce-45df-a0c0-12205a5efd88
+# ╠═62596457-7439-4e55-8d18-f667b7871d21
+# ╠═3cf33a07-62b9-4068-9eea-1c04effe5716
+# ╟─a6d9ca11-21a3-40c8-9f32-9bbfdc773e49
+# ╠═d1fc5d61-caf3-4a21-ab8a-68586462a162
+# ╠═e46ccadc-3f3c-4704-865f-740bb059ae19
+# ╟─4572b20e-19e2-45e8-ba45-d4eb55cd3f4a
+# ╠═1e2d0f82-5209-4406-85d4-a465b12515a7
+# ╠═81707893-f1fb-4062-b371-e352e01b28fc
+# ╠═801ba580-31c5-4d04-8557-afa86586048f
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
