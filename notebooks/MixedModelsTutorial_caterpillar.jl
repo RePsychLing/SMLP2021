@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.15.1
+# v0.16.0
 
 using Markdown
 using InteractiveUtils
@@ -12,7 +12,6 @@ begin
 	using LinearAlgebra
 	using MixedModels
 	using MixedModelsMakie
-	using RCall
 	using Statistics
 	using StatsBase
 	CairoMakie.activate!(type="svg")
@@ -69,7 +68,7 @@ md"""
 """
 
 # ╔═╡ 39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
-dat = rcopy(R"readRDS('./data/EmotikonSubset.rds')");
+dat = DataFrame(Arrow.Table("data/fggk21_subset.arrow"), copycols=true);
 
 # ╔═╡ 0051ec83-7c30-4d28-9dfa-4c6f5d0259fa
 md"""
@@ -282,7 +281,7 @@ These functions are **disabled** at the start of the notebook. The `caterpillar`
 
 # ╔═╡ cbe2197e-12c7-4d55-8817-d25d7b7cc5bd
 md"""
-```
+```julia
 struct RanefInfo{T<:AbstractFloat}
     cnames::Vector{String}
     levels::Vector
@@ -301,6 +300,8 @@ Return a `NamedTuple{fnames(m), NTuple(k, RanefInfo)}` from model `m`
 """
 
 # ╔═╡ 90ce17cc-d497-4605-aa62-be69343e03eb
+md"""
+```julia
 function ranefinfo(m::LinearMixedModel{T}) where {T}
     fn = fnames(m)
     val = sizehint!(RanefInfo[], length(fn))
@@ -317,6 +318,8 @@ function ranefinfo(m::LinearMixedModel{T}) where {T}
     end
     NamedTuple{fn}((val...,))
 end
+```
+"""
 
 # ╔═╡ 2f8e0b3c-2768-457e-9688-1928301871f5
 rem12 = ranefinfo(m12);
@@ -337,6 +340,8 @@ of `r.ranef`, usually the `(Intercept)` random effects.
 
 
 # ╔═╡ d1efb45b-44e4-4a6c-a967-0dc054a5ae83
+md"""
+```julia
 function caterpillar!(f::Figure, r::RanefInfo; orderby=1)
     rr = r.ranef
     vv = view(rr, :, orderby)
@@ -356,7 +361,8 @@ function caterpillar!(f::Figure, r::RanefInfo; orderby=1)
     axs[1].yticks = (y, r.levels[ord])
     f
 end
-
+```
+"""
 
 # ╔═╡ 64e3f006-9120-40a5-97da-8d6694a7cc87
 caterpillar!(Figure(; resolution=(800,400)), ranefinfo(m11).Cohort; orderby=1)
@@ -375,16 +381,22 @@ caterpillar!(Figure(; resolution=(800,800)), rem13.School; orderby=6)
 
 # ╔═╡ 781486fc-79b4-4e2e-9902-c29c3e4460b6
 md"""
-    caterpillar(m::LinearMixedModel, gf::Symbol)
+```julia    
+	caterpillar(m::LinearMixedModel, gf::Symbol)
 Returns a `Figure` of a "caterpillar plot" of the random-effects means and prediction intervals
 A "caterpillar plot" is a horizontal error-bar plot of conditional means and standard deviations
 of the random effects.
+```
 """
 
 # ╔═╡ 28e8dc7f-7841-4651-9119-de785086124a
+md"""
+```julia
 function caterpillar(m::LinearMixedModel, gf::Symbol=first(fnames(m)))
     caterpillar!(Figure(resolution=(1000,800)), ranefinfo(m)[gf])
 end
+```
+"""
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -395,7 +407,6 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
 MixedModelsMakie = "b12ae82c-6730-437f-aff9-d2c38332a376"
-RCall = "6f49c342-dc21-5d91-9882-a32aef131414"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
@@ -405,7 +416,6 @@ CairoMakie = "~0.6.5"
 DataFrames = "~1.2.2"
 MixedModels = "~4.1.1"
 MixedModelsMakie = "~0.3.7"
-RCall = "~0.13.12"
 StatsBase = "~0.33.10"
 """
 
@@ -516,12 +526,6 @@ git-tree-sha1 = "f2202b55d816427cd385a9a4f3ffb226bee80f99"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+0"
 
-[[CategoricalArrays]]
-deps = ["DataAPI", "Future", "JSON", "Missings", "Printf", "RecipesBase", "Statistics", "StructTypes", "Unicode"]
-git-tree-sha1 = "1562002780515d2573a4fb0c3715e4e57481075e"
-uuid = "324d7699-5711-5eae-9e2f-1d82baa6b597"
-version = "0.10.0"
-
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "bdc0937269321858ab2a4f288486cb258b9a0af7"
@@ -591,12 +595,6 @@ version = "3.34.0"
 [[CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-
-[[Conda]]
-deps = ["JSON", "VersionParsing"]
-git-tree-sha1 = "299304989a5e6473d985212c28928899c74e9421"
-uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
-version = "1.5.2"
 
 [[Contour]]
 deps = ["StaticArrays"]
@@ -1319,12 +1317,6 @@ git-tree-sha1 = "12fbe86da16df6679be7521dfb39fbc861e1dc7b"
 uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 version = "2.4.1"
 
-[[RCall]]
-deps = ["CategoricalArrays", "Conda", "DataFrames", "DataStructures", "Dates", "Libdl", "Missings", "REPL", "Random", "Requires", "StatsModels", "WinReg"]
-git-tree-sha1 = "80a056277142a340e646beea0e213f9aecb99caa"
-uuid = "6f49c342-dc21-5d91-9882-a32aef131414"
-version = "0.13.12"
-
 [[REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
@@ -1569,17 +1561,6 @@ git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
 uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
 version = "0.4.1"
 
-[[VersionParsing]]
-git-tree-sha1 = "80229be1f670524750d905f8fc8148e5a8c4537f"
-uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
-version = "1.2.0"
-
-[[WinReg]]
-deps = ["Test"]
-git-tree-sha1 = "808380e0a0483e134081cc54150be4177959b5f4"
-uuid = "1b915085-20d7-51cf-bf83-8f477d6f5128"
-version = "0.3.1"
-
 [[WoodburyMatrices]]
 deps = ["LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "59e2ad8fd1591ea019a5259bd012d7aee15f995c"
@@ -1757,12 +1738,12 @@ version = "3.5.0+0"
 # ╟─61cd093e-aa4e-475a-9d62-3ddd3e2b5fd7
 # ╠═205b7fdb-2db6-4c81-a75b-b0729f57735e
 # ╟─10ef55d6-6048-4353-92e5-e4621bfb130e
-# ╠═cbe2197e-12c7-4d55-8817-d25d7b7cc5bd
+# ╟─cbe2197e-12c7-4d55-8817-d25d7b7cc5bd
 # ╟─32acfdf0-ecb6-4acb-904f-d7b963771d6d
-# ╠═90ce17cc-d497-4605-aa62-be69343e03eb
+# ╟─90ce17cc-d497-4605-aa62-be69343e03eb
 # ╟─ffcc35da-25b8-4bee-80d2-93b033584cd4
-# ╠═d1efb45b-44e4-4a6c-a967-0dc054a5ae83
-# ╠═781486fc-79b4-4e2e-9902-c29c3e4460b6
-# ╠═28e8dc7f-7841-4651-9119-de785086124a
+# ╟─d1efb45b-44e4-4a6c-a967-0dc054a5ae83
+# ╟─781486fc-79b4-4e2e-9902-c29c3e4460b6
+# ╟─28e8dc7f-7841-4651-9119-de785086124a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

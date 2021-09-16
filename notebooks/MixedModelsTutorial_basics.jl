@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.15.1
+# v0.16.0
 
 using Markdown
 using InteractiveUtils
@@ -17,7 +17,6 @@ begin
 	using MixedModels
 	using MixedModelsMakie
 	using MixedModelsMakie: simplelinreg
-	using RData
 	using Statistics
 	using StatsBase
 	CairoMakie.activate!(type="svg")
@@ -73,7 +72,7 @@ md"""
 """
 
 # ╔═╡ 39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
-dat = load("data/EmotikonSubset.rds");
+dat = DataFrame(Arrow.Table("data/fggk21_subset.arrow"), copycols=true);
 
 # ╔═╡ 7440c439-9d4c-494f-9ac6-18c9fb2fe144
 begin
@@ -82,7 +81,6 @@ begin
 	select!(groupby(dat,  :Test), :, :score => zscore => :zScore); # z-score
 	recode!(dat.Test, "Run" => "Endurance", "Star_r" => "Coordination",
 	                  "S20_r" => "Speed", "SLJ" => "PowerLOW", "BPT" => "PowerUP")
-	levels!(dat.Sex, ["Boys", "Girls"])
 	viewdf(dat)
 end
 
@@ -230,14 +228,11 @@ begin
 		"PowerLOW" => "SLJ",
 		"PowerUP" => "BPT",
 	)
-	levels!(dat.Sex,  ["Girls", "Boys"])
 	contr = merge(
         Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		Dict(:Sex => EffectsCoding(levels=["Girls", "Boys"])),
-	    Dict(:Test => SeqDiffCoding(levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])),
-        Dict(:TestHC => HelmertCoding(
-				levels=["S20_r", "SLJ", "Star_r", "Run", "BPT"],)
-			),
+		Dict(:Sex => EffectsCoding(levels=["Girls", "Boys"]),
+	         :Test => SeqDiffCoding(levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"]),
+             :TestHC => HelmertCoding(levels=["S20_r", "SLJ", "Star_r", "Run", "BPT"]))
 	)
 end;
 
@@ -621,7 +616,7 @@ propertynames(m1)  # names of available extractors
 md"""
 ### 3.3 Covariance parameter estimates
 These commands inform us about the model parameters associated with the RES.
-```
+```julia
 + julia> issingular(m1)        # Test singularity for param. vector m1.theta
 + julia> VarCorr(m1)           # MixedModels.VarCorr: est. of RES
 + julia> propertynames(m1)
@@ -653,7 +648,7 @@ md"""
 ### 3.4 Model "predictions" 
 These commands inform us about extracion of conditional modes/means and (co-)variances, that using the model parameters to improve the predictions for units (levels) of the grouping (random) factors. We need this information, e.g., for partial-effect response profiles (e.g., facet plot) or effect profiles (e.g., caterpillar plot), or visualizing the borrowing-strength effect for correlation parameters (e.g., shrinkage plots). 
 
-```
+```julia
 + julia> 
 + julia> condVar(m1a)
 + julia> 
@@ -662,7 +657,7 @@ These commands inform us about extracion of conditional modes/means and (co-)var
 
 Some plotting functions are currently available from the `MixedModelsMakie` package or via custom functions.
 
-```
+```julia
 + julia> 
 + julia> caterpillar!(m1, orderby=1)
 + julia> shrinkage!(m1)
@@ -781,7 +776,6 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
 MixedModelsMakie = "b12ae82c-6730-437f-aff9-d2c38332a376"
-RData = "df47a6cb-8c03-5eed-afd8-b6050d6c41da"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
@@ -794,7 +788,6 @@ CategoricalArrays = "~0.10.0"
 DataFrames = "~1.2.2"
 MixedModels = "~4.1.1"
 MixedModelsMakie = "~0.3.7"
-RData = "~0.8.3"
 StatsBase = "~0.33.10"
 """
 
@@ -1732,12 +1725,6 @@ git-tree-sha1 = "12fbe86da16df6679be7521dfb39fbc861e1dc7b"
 uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 version = "2.4.1"
 
-[[RData]]
-deps = ["CategoricalArrays", "CodecZlib", "DataFrames", "Dates", "FileIO", "Requires", "TimeZones", "Unicode"]
-git-tree-sha1 = "19e47a495dfb7240eb44dc6971d660f7e4244a72"
-uuid = "df47a6cb-8c03-5eed-afd8-b6050d6c41da"
-version = "0.8.3"
-
 [[REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
@@ -2202,7 +2189,7 @@ version = "3.5.0+0"
 # ╠═815c070a-8cc1-40f3-91bb-7c38f904399b
 # ╠═4eef686a-6943-45a8-8309-e1b264af34b5
 # ╠═89a1cfec-2b87-4bf9-95e3-7c7312069af8
-# ╠═1ee16dfe-97d6-4958-b9c4-cf2812691057
+# ╟─1ee16dfe-97d6-4958-b9c4-cf2812691057
 # ╠═7302b067-270f-4d6a-a0c6-fabd46cc72b0
 # ╠═acd9a3eb-6eae-4e09-8932-e44f91e725b4
 # ╠═1c9de228-93a4-4d1a-82b5-48fe22cfe0f1

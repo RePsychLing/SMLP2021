@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.15.1
+# v0.16.0
 
 using Markdown
 using InteractiveUtils
@@ -10,10 +10,11 @@ begin
 	using AlgebraOfGraphics: linear
 	using Arrow
 	using CairoMakie
-	using CSV
+	using Chain
+	using CategoricalArrays
 	using DataFrames
+	using DataFrameMacros
 	using MixedModels
-	using RData
 	using Statistics
 	using StatsBase
 end
@@ -51,21 +52,18 @@ md"""
 ### 1.0 Packages and functions
 """
 
-# ╔═╡ e2df154b-5917-447b-835f-e21475938291
-function viewdf(x)  # b/c Pluto and CategoricalArrays don't play well together
-	DataFrame(Arrow.Table(take!(Arrow.write(IOBuffer(), x))))
-end
-
 # ╔═╡ f710eadc-15e2-4911-b6b2-2b97d9ce7e3e
 md"""
-### 1.1 Readme for 'EmotikonSubset.rds'
+### 1.1 Readme for './data/fggk21.rds'
 
-1. Cohort: 9 levels; 2011-2019
-2. School: 46 levels 
-3. Child: 11,566 levels
-4. Sex: 5,893 girls, 5,673 boys
-5. age: test date - middle of month of birthdate 
-6. Test: 5 levels
+Number of scores: 525126
+
+ 1. Cohort: 9 levels; 2011-2019
+ 2. School: 515 levels 
+ 3. Child: 108295 levels; all children are between 8.0 and 8.99 years old
+ 4. Sex: "Girls" (n=55,086), "Boys" (n= 53,209)
+ 5. age: testdate - middle of month of birthdate 
+ 6. Test: 5 levels
      + Endurance (`Run`):  6 minute endurance run [m]; to nearest 9m in 9x18m field
      + Coordination (`Star_r`): star coordination run [m/s]; 9x9m field, 4 x diagonal = 50.912 m
      + Speed(`S20_r`): 20-meters sprint [m/s]
@@ -79,7 +77,27 @@ md"""
 """
 
 # ╔═╡ bea880a9-0513-4b70-8a72-af73fb83bd19
-dat = load("data/EmotikonSubset.rds");
+begin	
+	data = DataFrame(Arrow.Table("./data/fggk21.arrow"))
+	describe(data)
+end
+
+# ╔═╡ a3ccdbc7-f499-4f53-b4b5-31fc271a446b
+md"""
+#### 1.2.3 Extract a stratified subsample 
+
+We extract a random sample of 500 children from the Sex (2)  x Test (5) cells of the design. Cohort and School are random. 
+"""
+
+# ╔═╡ d05f059f-04f8-4ac5-a6ee-0c975aa1691d
+begin
+    dat =
+	@chain data begin
+  	  @transform(:type = :Sex == "female" ? "girl" : "boy")
+   	  @groupby(:Test, :Sex)
+   	  combine(x -> x[sample(1:nrow(x), 500), :])
+	end
+end
 
 # ╔═╡ f51a7baf-a68e-4fae-b62d-9adfbf2b3412
 md"""
@@ -89,9 +107,7 @@ md"""
 # ╔═╡ 924e86cc-d799-4ed9-ac89-34be0b4872ed
 begin
 	transform!(dat, :age, :age => (x -> x .- 8.5) => :a1); # centered age (linear)
-	transform!(dat,  :a1, :a1  => (x -> x.^2) => :a2);     # centered age (quadr.)
 	select!(groupby(dat,  :Test), :, :score => zscore => :zScore); # z-score
-	viewdf(dat)
 end
 
 # ╔═╡ 8318ac96-92a7-414d-8611-f1830642539a
@@ -99,28 +115,12 @@ begin
 	dat2 = combine(groupby(dat, [:Test, :Sex]), 
                              :score => mean, :score  => std, 
                              :zScore => mean, :zScore => std)
-	viewdf(dat2)
 end
 
 # ╔═╡ fef952af-c3c0-4354-85a3-c5d5076d705c
 md"""
 #### 1.2.3 Figure of age x Sex x Test interactions
-"""
-
-# ╔═╡ 9164cac1-7a66-4189-92db-28207bd93002
-begin
-	design = mapping(:age, :zScore; color = :Sex, col = :Test)
-	lines = design * linear()
-	data(dat) * lines |> draw
-end
-
-# ╔═╡ 1597437e-d278-4546-8ffb-d121daf20ded
-md"""
-The main results of relevance for this tutorial are shown in this figure. 
-There are developmental gains within the ninth year of life for each of
-the five tests and the tests differ in the magnitude of these gains. 
-Also boys outperform girls on each test and, again, the sex difference 
-varies across test.
+The main results of relevance here are shown in Figure 2 of [Scientific Reports 11:17566](https://rdcu.be/cwSeR).
 """
 
 # ╔═╡ 59afbe0c-0c70-4fc5-97f1-5020ef33b5cc
@@ -158,11 +158,13 @@ Obviously, the tradeoff between theoretical motivation and statistical purity is
 
 # ╔═╡ a7d67c88-a2b5-4326-af67-ae038fbaeb19
 contr1 = merge(
-		   Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"])),
-	       Dict(:Test => SeqDiffCoding(; levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"]))
+		 # we ise a "dictionary comprehension" to quickly create
+		 # the repeated Grouping() contrasts, then merge that with the
+	     # dictionary containing the other contrasts
+	     Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
+		 Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"]),
+	          :Test => SeqDiffCoding(; levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])))
 	
-	   )
 
 # ╔═╡ e41bb345-bd0a-457d-8d57-1e27dde43a63
 f_ovi_1 = @formula zScore ~ 1 + Test + (1 | Child);
@@ -246,8 +248,8 @@ The statistical advantage of _HelmertCoding_ is that the resulting contrasts are
 # ╔═╡ 7dca92f9-dcc2-462c-b501-9ecabce74005
 contr2 = merge(
      Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),  	 
-	 Dict(:Sex =>     EffectsCoding( levels=["Girls", "Boys"])),
-	 Dict(:Test => HelmertCoding(
+	 Dict(:Sex =>     EffectsCoding( levels=["Girls", "Boys"]),
+	      :Test => HelmertCoding(
 			       levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])));
 
 # ╔═╡ c8a80ac2-af56-4503-b05d-d727d7bcac12
@@ -279,8 +281,8 @@ The third set of contrasts uses _HypothesisCoding_. _Hypothesis coding_ allows t
 # ╔═╡ 9f8a0809-0189-480b-957a-3d315763f8a4
 contr3 = merge(
 		   Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"])),
-	       Dict(:Test => HypothesisCoding( [-1 -1 -1 -1 +4
+		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"]),
+	            :Test => HypothesisCoding( [-1 -1 -1 -1 +4
 	         							    -1 +1  0  0  0
 	           								 0 -1 +1  0  0
 	           								 0  0 -1 +1  0],
@@ -300,8 +302,8 @@ Anyway, none of the interactions between `age` x `Sex` with the four `Test` cont
 # ╔═╡ 9095f1b1-1810-4f30-a70c-8c3880e8e538
 contr1b = merge(
      Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),  	 
-	 Dict(:Sex =>     EffectsCoding( levels=["Girls", "Boys"])),
-	 Dict(:Test => HypothesisCoding( [-1 +1  0  0  0
+	 Dict(:Sex =>     EffectsCoding( levels=["Girls", "Boys"]),
+	      :Test => HypothesisCoding( [-1 +1  0  0  0
 	         						   0 -1 +1  0  0
 	           					       0  0 -1 +1  0
 	           						   0  0  0 -1 +1],
@@ -361,8 +363,8 @@ PC1 contrasts the worst and the best indicator of physical **health**; PC2 contr
 # ╔═╡ 42984738-dbb3-47a8-bb6e-3a721edef16d
 contr4 = merge(
 		   Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"])),
-	       Dict(:Test => HypothesisCoding( [-1  0  0  0 +1
+		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"]),
+	            :Test => HypothesisCoding( [-1  0  0  0 +1
 	         							    -3 +2 +2 +2 -3
 	           								 0 +2 -1 -1  0
 	           								 0  0 +1 -1  0],
@@ -386,8 +388,8 @@ There is a numerical interaction with a z-value > 2.0 for the first PCA (i.e., `
 # ╔═╡ 786c6ce9-e292-4ced-b358-514b65b0dde2
 contr4b = merge(
 		   Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"])),
-	       Dict(:Test => HypothesisCoding( [.49 -.04  .20  .03 -.85
+		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"]),
+	            :Test => HypothesisCoding( [.49 -.04  .20  .03 -.85
 	         							    .70 -.56 -.21 -.13  .37
 	           								.31  .68 -.56 -.35  .00
 	           								.04  .08  .61 -.78  .13],
@@ -565,22 +567,24 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
-CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
+Chain = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
-RData = "df47a6cb-8c03-5eed-afd8-b6050d6c41da"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 AlgebraOfGraphics = "~0.5.3"
 Arrow = "~1.6.2"
-CSV = "~0.8.5"
 CairoMakie = "~0.6.5"
+CategoricalArrays = "~0.10.0"
+Chain = "~0.4.8"
+DataFrameMacros = "~0.1.0"
 DataFrames = "~1.2.2"
 MixedModels = "~4.1.1"
-RData = "~0.8.3"
 StatsBase = "~0.33.10"
 """
 
@@ -679,12 +683,6 @@ git-tree-sha1 = "215a9aa4a1f23fbd05b92769fdd62559488d70e9"
 uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 version = "0.4.1"
 
-[[CSV]]
-deps = ["Dates", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "Tables", "Unicode"]
-git-tree-sha1 = "b83aa3f513be680454437a0eee21001607e5d983"
-uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
-version = "0.8.5"
-
 [[Cairo]]
 deps = ["Cairo_jll", "Colors", "Glib_jll", "Graphics", "Libdl", "Pango_jll"]
 git-tree-sha1 = "d0b3f8b4ad16cb0a2988c6788646a5e6a17b6b1b"
@@ -708,6 +706,11 @@ deps = ["DataAPI", "Future", "JSON", "Missings", "Printf", "RecipesBase", "Stati
 git-tree-sha1 = "1562002780515d2573a4fb0c3715e4e57481075e"
 uuid = "324d7699-5711-5eae-9e2f-1d82baa6b597"
 version = "0.10.0"
+
+[[Chain]]
+git-tree-sha1 = "cac464e71767e8a04ceee82a889ca56502795705"
+uuid = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+version = "0.4.8"
 
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
@@ -794,6 +797,12 @@ version = "4.0.4"
 git-tree-sha1 = "ee400abb2298bd13bfc3df1c412ed228061a2385"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.7.0"
+
+[[DataFrameMacros]]
+deps = ["DataFrames"]
+git-tree-sha1 = "508d57ef7b78551cf69c2837d80af5017ce57217"
+uuid = "75880514-38bc-4a95-a458-c2aea5a3a702"
+version = "0.1.0"
 
 [[DataFrames]]
 deps = ["Compat", "DataAPI", "Future", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Reexport", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
@@ -1483,12 +1492,6 @@ git-tree-sha1 = "12fbe86da16df6679be7521dfb39fbc861e1dc7b"
 uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 version = "2.4.1"
 
-[[RData]]
-deps = ["CategoricalArrays", "CodecZlib", "DataFrames", "Dates", "FileIO", "Requires", "TimeZones", "Unicode"]
-git-tree-sha1 = "19e47a495dfb7240eb44dc6971d660f7e4244a72"
-uuid = "df47a6cb-8c03-5eed-afd8-b6050d6c41da"
-version = "0.8.3"
-
 [[REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
@@ -1864,15 +1867,14 @@ version = "3.5.0+0"
 # ╟─4cd88e2b-c6f0-49cb-846a-eaae9f892e02
 # ╟─be9aca0c-3e3d-4470-a399-3438cb020915
 # ╠═40300e47-3092-43fd-9fb3-a28fa1df215a
-# ╠═e2df154b-5917-447b-835f-e21475938291
 # ╟─f710eadc-15e2-4911-b6b2-2b97d9ce7e3e
 # ╠═bea880a9-0513-4b70-8a72-af73fb83bd19
+# ╟─a3ccdbc7-f499-4f53-b4b5-31fc271a446b
+# ╠═d05f059f-04f8-4ac5-a6ee-0c975aa1691d
 # ╟─f51a7baf-a68e-4fae-b62d-9adfbf2b3412
 # ╠═924e86cc-d799-4ed9-ac89-34be0b4872ed
 # ╠═8318ac96-92a7-414d-8611-f1830642539a
 # ╟─fef952af-c3c0-4354-85a3-c5d5076d705c
-# ╠═9164cac1-7a66-4189-92db-28207bd93002
-# ╟─1597437e-d278-4546-8ffb-d121daf20ded
 # ╟─59afbe0c-0c70-4fc5-97f1-5020ef33b5cc
 # ╠═a7d67c88-a2b5-4326-af67-ae038fbaeb19
 # ╠═e41bb345-bd0a-457d-8d57-1e27dde43a63
