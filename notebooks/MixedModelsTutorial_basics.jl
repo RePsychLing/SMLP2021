@@ -11,9 +11,9 @@ begin
 	using Arrow
 	using CairoMakie
 	using CategoricalArrays
-	using CSV
+	using Chain
 	using DataFrames
-	using LinearAlgebra
+	using DataFrameMacros
 	using MixedModels
 	using MixedModelsMakie
 	using MixedModelsMakie: simplelinreg
@@ -26,7 +26,7 @@ end
 md"""
 # Mixed Models Tutorial: Basics
 
-Ths script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). Age and sex effects in physical fitness components of 108,295 third graders including 515 primary schools and 9 cohorts. [Scientific Reports 11:17566](https://rdcu.be/cwSeR)
+This script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). Age and sex effects in physical fitness components of 108,295 third graders including 515 primary schools and 9 cohorts. [Scientific Reports 11:17566](https://rdcu.be/cwSeR)
 To circumvent delays associated with model fitting we work with models that are less complex than those in the reference publication. All the data to reproduce the models in the publication are used here, too; the script requires only a few changes to specify the more complex models in the paper. 
 
 The script is structured in three main sections: 
@@ -39,21 +39,18 @@ The script is structured in three main sections:
 ### 1.0 Packages and functions
 """
 
-# ╔═╡ faafd359-fb38-4f49-9dfd-19cb4f0c5a54
-function viewdf(x)  # b/c Pluto and CategoricalArrays don't play well together
-	DataFrame(Arrow.Table(take!(Arrow.write(IOBuffer(), x))))
-end
-
 # ╔═╡ ee85abd9-0172-44d3-b03a-c6a780d33c72
 md"""
-### 1.1 Readme for 'EmotikonSubset.rds'
+### 1.1 Readme for './data/fggk21.arrow'
 
-1. Cohort: 9 levels; 2011-2019
-2. School: 46 levels 
-3. Child: 11566 levels; all children were between 6.0 and 6.99 years at legal keydate (30 September) of school enrollement.
-4. Sex: 5893 girls, 5673 boys
-5. age: test date - middle of month of birthdate (ranges between 7.9 and 9.2)
-6. Test: 5 levels
+Number of scores: 525126
+
+ 1. Cohort: 9 levels; 2011-2019
+ 2. School: 515 levels 
+ 3. Child: 108295 levels; all children are between 8.0 and 8.99 years old
+ 4. Sex: "Girls" (n=55,086), "Boys" (n= 53,209)
+ 5. age: testdate - middle of month of birthdate 
+ 6. Test: 5 levels
      + Endurance (`Run`):  6 minute endurance run [m]; to nearest 9m in 9x18m field
      + Coordination (`Star_r`): star coordination run [m/s]; 9x9m field, 4 x diagonal = 50.912 m
      + Speed(`S20_r`): 20-meters sprint [m/s]
@@ -61,27 +58,43 @@ md"""
      + Muscle power up (`BPT`): 1-kg medicine ball push test [m] 
  7. score - see units
 
-### 1.2 Preprocessing
-"""
+ ### 1.2 Preprocessing
 
-# ╔═╡ 5d410833-be44-47a1-a074-f5173ab0035b
-md"""
-+ Read
-+ Transform
-+ Recode
+ #### 1.2.1 Read data
 """
 
 # ╔═╡ 39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
-dat = DataFrame(Arrow.Table("data/fggk21_subset.arrow"), copycols=true);
+begin
+	df = DataFrame(Arrow.Table("./data/fggk21.arrow"))
+	describe(dat)
+end
+
+# ╔═╡ 1e6fe7f6-9ce4-4b13-953b-bf7dc532e53a
+md"""
+#### 1.2.3 Extract a stratified subsample 
+
+We extract a random sample of 1000 children from the Sex (2)  x Test (5) cells of the design. Cohort and School are random. 
+"""
+
+# ╔═╡ 6e3adecf-98ff-4437-8e16-3854381ca38b
+begin
+    dat =
+	@chain df begin
+  	  @transform(:type = :Sex == "female" ? "girl" : "boy")
+   	  @groupby(:Test, :Sex)
+   	  combine(x -> x[sample(1:nrow(x), 1000), :])
+	end
+end
+
+# ╔═╡ 51b77ca3-374d-4701-b936-b4a40834cf70
+md"""
+#### 1.2.4 Transformations
+"""
 
 # ╔═╡ 7440c439-9d4c-494f-9ac6-18c9fb2fe144
 begin
 	transform!(dat, :age, :age => (x -> x .- 8.5) => :a1); # centered age (linear)
-	transform!(dat,  :a1, :a1  => (x -> x.^2) => :a2);     # centered age (quadr.)
 	select!(groupby(dat,  :Test), :, :score => zscore => :zScore); # z-score
-	recode!(dat.Test, "Run" => "Endurance", "Star_r" => "Coordination",
-	                  "S20_r" => "Speed", "SLJ" => "PowerLOW", "BPT" => "PowerUP")
-	viewdf(dat)
 end
 
 # ╔═╡ 57693079-d489-4e8c-a745-338ccde7eab1
@@ -99,7 +112,7 @@ varies across test.
 md"""#### 1.3.1 Compute means"""
 
 # ╔═╡ e9280e08-ace4-48cd-ad4a-55501f315d6a
-df = groupby(   # summary grouped data frame by test, sex, rounded age
+dat2 = groupby(   # summary grouped data frame by test, sex, rounded age
 	 combine(
 		groupby(
 			select(dat,
@@ -114,7 +127,7 @@ df = groupby(   # summary grouped data frame by test, sex, rounded age
 		:age => mean => :ageM
 		),
 	:Test
-);
+)
 
 # ╔═╡ 2574cf1c-4a9a-462b-a2f2-d599a8b42ec1
 md"""
@@ -130,7 +143,7 @@ begin
 	    "Star_r" => "Coordination",
 	    "S20_r" => "Speed",
 	    "SLJ" => "PowerLOW",
-	    "BPT" => "PowerUP",
+	    "BPT" => "PowerUP"
     ]
 end;
 
@@ -157,15 +170,8 @@ end
 # ╔═╡ eea9c588-f5f8-4905-8774-7031162f9be0
 md"""
 #### 1.3.3 Figure 
+The main results of relevance here are shown in Figure 2 of [Scientific Reports 11:17566](https://rdcu.be/cwSeR).
 """
-
-# ╔═╡ 1f6446cc-8b40-4cec-880c-3318f78a56f8
-
-begin
-	design = mapping(:age, :zScore; color = :Sex, col = :Test)
-	lines = design * linear()
-	data(dat) * lines |> draw
-end
 
 # ╔═╡ a41bc417-3ca7-4f14-be88-5a91d236e88f
 md"""
@@ -176,13 +182,6 @@ run test), _Coordination_ = star-run test, _Speed_ = 20-m linear sprint test,
 _PowerLOW_ = power of lower limbs (i.e., standing long jump test), _PowerUP_ = 
 apower of upper limbs (i.e., ball push test), SD = standard deviation. Points 
 are binned observed child means; lines are simple regression fits to the observations.
-"""
-
-# ╔═╡ 1ef832af-6226-45ac-97ee-2cbd5b67600a
-md"""
-#### 1.3.4 To be done
-+ Move legend into plot; drop legend title
-+ Add means of binned age groups from df
 """
 
 # ╔═╡ c6c6f056-b8b9-4190-ac14-b900bafa04df
@@ -220,19 +219,13 @@ notbebook.
 
 # ╔═╡ c5326753-a03b-4739-a82e-90ffa7c1ebdb
 begin
-	recode!(
-		dat.Test,
-		"Endurance"  => "Run",
-		"Coordination" => "Star_r",
-	    "Speed" => "S20_r",
-		"PowerLOW" => "SLJ",
-		"PowerUP" => "BPT",
-	)
 	contr = merge(
         Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		Dict(:Sex => EffectsCoding(levels=["Girls", "Boys"]),
-	         :Test => SeqDiffCoding(levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"]),
-             :TestHC => HelmertCoding(levels=["S20_r", "SLJ", "Star_r", "Run", "BPT"]))
+		Dict(:Sex => EffectsCoding(levels=["Girls", "Boys"])),
+	    Dict(:Test => SeqDiffCoding(levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])),
+        Dict(:TestHC => HelmertCoding(
+				levels=["S20_r", "SLJ", "Star_r", "Run", "BPT"],)
+			),
 	)
 end;
 
@@ -616,7 +609,7 @@ propertynames(m1)  # names of available extractors
 md"""
 ### 3.3 Covariance parameter estimates
 These commands inform us about the model parameters associated with the RES.
-```julia
+```
 + julia> issingular(m1)        # Test singularity for param. vector m1.theta
 + julia> VarCorr(m1)           # MixedModels.VarCorr: est. of RES
 + julia> propertynames(m1)
@@ -648,7 +641,7 @@ md"""
 ### 3.4 Model "predictions" 
 These commands inform us about extracion of conditional modes/means and (co-)variances, that using the model parameters to improve the predictions for units (levels) of the grouping (random) factors. We need this information, e.g., for partial-effect response profiles (e.g., facet plot) or effect profiles (e.g., caterpillar plot), or visualizing the borrowing-strength effect for correlation parameters (e.g., shrinkage plots). 
 
-```julia
+```
 + julia> 
 + julia> condVar(m1a)
 + julia> 
@@ -657,7 +650,7 @@ These commands inform us about extracion of conditional modes/means and (co-)var
 
 Some plotting functions are currently available from the `MixedModelsMakie` package or via custom functions.
 
-```julia
+```
 + julia> 
 + julia> caterpillar!(m1, orderby=1)
 + julia> shrinkage!(m1)
@@ -683,20 +676,11 @@ begin	# Cohort
 	caterpillar!(Figure(; resolution=(800,400)), cm_m1_chrt; orderby=1)
 end
 
-# ╔═╡ 323d7697-62de-4cc0-900d-5137e9e627fb
-begin	# School
-	cm_m1_schl = ranefinfo(m1)[:School];  
-	caterpillar!(Figure(; resolution=(800,800)), cm_m1_schl; orderby=1)
-end
-
 # ╔═╡ e07e768b-a1ba-438a-8082-de818e798565
 md"#### 3.4.2 Shrinkage plots"
 
 # ╔═╡ b044860a-c571-4dcb-bc3c-d5b07fe58695
 shrinkageplot!(Figure(; resolution=(800,800)), m1, :Cohort)
-
-# ╔═╡ 6754c267-0ea7-4369-97a8-dfce330ceed1
-shrinkageplot!(Figure(; resolution=(800,800)), m1, :School)
 
 # ╔═╡ 91db2051-b222-41c4-96c5-a2fa0c977bfa
 md" These are just teasers. We will pick this up in a separate tutorial. Enjoy! "
@@ -705,6 +689,7 @@ md" These are just teasers. We will pick this up in a separate tutorial. Enjoy! 
 md"""
 ## 4. PCA of Random Effect Structure
 ### 4.1 Scores in RES
+The correlations are quite different from the full sample, but the PCs looks similar. 
 """
 
 # ╔═╡ 62596457-7439-4e55-8d18-f667b7871d21
@@ -735,14 +720,14 @@ MixedModels.PCA(m1c)
 # ╔═╡ 4572b20e-19e2-45e8-ba45-d4eb55cd3f4a
 md"""
 ## 5. Age x Sex nested in levels of test
+WARNING: These LMMs take some time to fit, even with only 10,000 children. Cells in this section must be enabled to execute (see Actions). 
 """
 
 # ╔═╡ 1e2d0f82-5209-4406-85d4-a465b12515a7
 begin
-	f1LL_nested = @formula zScore ~ 0 + Test & (a1*Sex) +
-	(0+Test+a1+Sex | School) +  (0+Test | Child) + 
-	zerocorr(0+Test | Cohort);
-
+f1LL_nested = @formula zScore ~ 0 + Test + Test & (a1*Sex) +
+							   (0+Test+a1+Sex | School) +  (0+Test | Child) + 
+  								zerocorr(0+Test | Cohort);
 	m1LL_nested = fit(MixedModel, f1LL_nested, dat, contrasts=contr);
     m1LL_nested
 end
@@ -753,7 +738,7 @@ begin
 	(0+Test+a1+Sex | School) +  (0+Test | Child) + 
 	zerocorr(0+Test | Cohort);
 
-	m1LL = fit(MixedModel, f1LL_nested, dat, contrasts=contr);
+	m1LL = fit(MixedModel, f1LL, dat, contrasts=contr);
 	m1LL
 end
 
@@ -769,11 +754,11 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
-CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
+Chain = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
 MixedModelsMakie = "b12ae82c-6730-437f-aff9-d2c38332a376"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
@@ -782,9 +767,10 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 [compat]
 AlgebraOfGraphics = "~0.5.3"
 Arrow = "~1.6.2"
-CSV = "~0.8.5"
 CairoMakie = "~0.6.5"
 CategoricalArrays = "~0.10.0"
+Chain = "~0.4.8"
+DataFrameMacros = "~0.1.0"
 DataFrames = "~1.2.2"
 MixedModels = "~4.1.1"
 MixedModelsMakie = "~0.3.7"
@@ -886,12 +872,6 @@ git-tree-sha1 = "215a9aa4a1f23fbd05b92769fdd62559488d70e9"
 uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 version = "0.4.1"
 
-[[CSV]]
-deps = ["Dates", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "Tables", "Unicode"]
-git-tree-sha1 = "b83aa3f513be680454437a0eee21001607e5d983"
-uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
-version = "0.8.5"
-
 [[Cairo]]
 deps = ["Cairo_jll", "Colors", "Glib_jll", "Graphics", "Libdl", "Pango_jll"]
 git-tree-sha1 = "d0b3f8b4ad16cb0a2988c6788646a5e6a17b6b1b"
@@ -915,6 +895,11 @@ deps = ["DataAPI", "Future", "JSON", "Missings", "Printf", "RecipesBase", "Stati
 git-tree-sha1 = "1562002780515d2573a4fb0c3715e4e57481075e"
 uuid = "324d7699-5711-5eae-9e2f-1d82baa6b597"
 version = "0.10.0"
+
+[[Chain]]
+git-tree-sha1 = "cac464e71767e8a04ceee82a889ca56502795705"
+uuid = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+version = "0.4.8"
 
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
@@ -1001,6 +986,12 @@ version = "4.0.4"
 git-tree-sha1 = "ee400abb2298bd13bfc3df1c412ed228061a2385"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.7.0"
+
+[[DataFrameMacros]]
+deps = ["DataFrames"]
+git-tree-sha1 = "508d57ef7b78551cf69c2837d80af5017ce57217"
+uuid = "75880514-38bc-4a95-a458-c2aea5a3a702"
+version = "0.1.0"
 
 [[DataFrames]]
 deps = ["Compat", "DataAPI", "Future", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Reexport", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
@@ -2105,10 +2096,11 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─eebef932-1d63-41e5-998f-9748379c43af
 # ╠═880ea5ac-a851-446e-8da9-d5f9f161a932
-# ╠═faafd359-fb38-4f49-9dfd-19cb4f0c5a54
-# ╟─ee85abd9-0172-44d3-b03a-c6a780d33c72
-# ╟─5d410833-be44-47a1-a074-f5173ab0035b
+# ╠═ee85abd9-0172-44d3-b03a-c6a780d33c72
 # ╠═39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
+# ╟─1e6fe7f6-9ce4-4b13-953b-bf7dc532e53a
+# ╠═6e3adecf-98ff-4437-8e16-3854381ca38b
+# ╟─51b77ca3-374d-4701-b936-b4a40834cf70
 # ╠═7440c439-9d4c-494f-9ac6-18c9fb2fe144
 # ╟─57693079-d489-4e8c-a745-338ccde7eab1
 # ╟─58d561e2-77c0-43c2-990d-008286de4e5c
@@ -2117,9 +2109,7 @@ version = "3.5.0+0"
 # ╠═a7e68776-7a42-4b4a-b540-f26b8b57d520
 # ╠═da044d64-8464-4846-8022-443cf8c9ecfd
 # ╟─eea9c588-f5f8-4905-8774-7031162f9be0
-# ╠═1f6446cc-8b40-4cec-880c-3318f78a56f8
 # ╟─a41bc417-3ca7-4f14-be88-5a91d236e88f
-# ╟─1ef832af-6226-45ac-97ee-2cbd5b67600a
 # ╟─c6c6f056-b8b9-4190-ac14-b900bafa04df
 # ╠═c5326753-a03b-4739-a82e-90ffa7c1ebdb
 # ╟─f7d6782e-dcd3-423c-a7fe-c125d8e4f810
@@ -2189,7 +2179,7 @@ version = "3.5.0+0"
 # ╠═815c070a-8cc1-40f3-91bb-7c38f904399b
 # ╠═4eef686a-6943-45a8-8309-e1b264af34b5
 # ╠═89a1cfec-2b87-4bf9-95e3-7c7312069af8
-# ╟─1ee16dfe-97d6-4958-b9c4-cf2812691057
+# ╠═1ee16dfe-97d6-4958-b9c4-cf2812691057
 # ╠═7302b067-270f-4d6a-a0c6-fabd46cc72b0
 # ╠═acd9a3eb-6eae-4e09-8932-e44f91e725b4
 # ╠═1c9de228-93a4-4d1a-82b5-48fe22cfe0f1
@@ -2200,10 +2190,8 @@ version = "3.5.0+0"
 # ╠═da3c1ba5-55cf-41f1-8cd6-8b2784532476
 # ╟─b2e83fe2-b60d-415d-8577-c0958bfe8d0e
 # ╠═80feb95f-4eb1-4363-8223-1d42f9c637a9
-# ╠═323d7697-62de-4cc0-900d-5137e9e627fb
 # ╟─e07e768b-a1ba-438a-8082-de818e798565
 # ╠═b044860a-c571-4dcb-bc3c-d5b07fe58695
-# ╠═6754c267-0ea7-4369-97a8-dfce330ceed1
 # ╟─91db2051-b222-41c4-96c5-a2fa0c977bfa
 # ╟─a70fe575-51ce-45df-a0c0-12205a5efd88
 # ╠═62596457-7439-4e55-8d18-f667b7871d21

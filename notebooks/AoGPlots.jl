@@ -1,16 +1,19 @@
 ### A Pluto.jl notebook ###
-# v0.15.1
+# v0.16.0
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ 8b38927e-11f1-45fd-b630-44113f0aac3d
 begin 
-	using CairoMakie   # for displaying static plots in a Pluto notebook
 	using Arrow
 	using AlgebraOfGraphics
+	using CairoMakie   # for displaying static plots in a Pluto notebook
+	using Chain
 	using DataFrames
+	using DataFrameMacros
 	using Statistics
+	using StatsBase
 	CairoMakie.activate!(type="svg") # use SVG (other options include PNG)
 end
 
@@ -24,10 +27,16 @@ The data have been saved as an Arrow-format file.
 """
 
 # ╔═╡ a8bc0d0e-fc13-4196-95c9-5922ed400cb4
-dat = Arrow.Table("./data/fggk21.arrow");
+tbl = Arrow.Table("./data/fggk21.arrow");
 
 # ╔═╡ 4825ea74-1902-4423-883d-a7b00a2aa359
-typeof(dat)
+typeof(tbl)
+
+# ╔═╡ b172a822-b648-4160-8723-ee67db4f09eb
+begin
+	df = DataFrame(tbl)
+	typeof(df)
+end
 
 # ╔═╡ 52b65f0d-f09e-47c8-81b5-624a09bc1c9a
 md"""
@@ -49,7 +58,16 @@ In this case the function is an anonymous function of the form `round.(x, digits
 """
 
 # ╔═╡ 53da799e-f794-42a5-9255-6503fde6dfa0
-describe(select(DataFrame(dat), :, :age => (x -> round.(x, digits=1)) => :rnd_age))
+begin
+	transform!(df, :age, :age => (x -> x .- 8.5) => :a1) # centered age (linear)
+	select!(groupby(df,  :Test), :, :score => zscore => :zScore) # z-score
+	tlabels = [     # establish order and labels of tbl.Test
+		"Run" => "Endurance",
+		"Star_r" => "Coordination",
+		"S20_r" => "Speed",
+		"SLJ" => "PowerLOW",	
+		"BPT" => "PowerUP"]
+end
 
 # ╔═╡ fa5e6e67-d37b-414d-8f3a-34f623f423af
 md"""
@@ -57,9 +75,9 @@ The next stage is a *group-apply-combine* operation to group the rows by `Sex`, 
 """
 
 # ╔═╡ f27eab8e-5fbd-442c-b4a2-a95b4c29cd52
-df = combine(
+df2 = combine(
 	groupby(
-		select(DataFrame(dat), :, :age => ByRow(x -> round(x; digits=1)) => :age),
+		select(df, :, :age => ByRow(x -> round(x; digits=1)) => :age),
 		[:Sex, :Test, :age],
 	),
 	:zScore => mean => :zScore,
@@ -73,19 +91,19 @@ md"""
 The `AlgebraOfGraphics` package applies operators to the results of functions such as `data` (specify the data table to be used), `mapping` (designate the roles of columns), and `visual` (type of visual presentation).
 """
 
-# ╔═╡ 27dbedac-3270-4c4b-ba42-3a99c6c54cba
+# ╔═╡ aa1b733a-84d1-4ed9-be47-0c0cdefbc21e
 begin
 	design = mapping(:age, :zScore; color = :Sex, col = :Test)
 	lines = design * linear()
 	means = design * visual(Scatter, markersize=5)
-	data(df) * means + data(dat) * lines |> draw
+	data(df2) * means + data(df) * lines |> draw
 end
 
 # ╔═╡ d81256c0-fa19-4926-b723-795cc9f569bc
 md"""
 + TBD: Relabel factor levels (Boys, Girls; fitness components for Test)
-+ TBD: Relevel factors; why not levels from table; use .RDS for now?
-+ TBD: Set range (7.8 to 9.2 and tick marks (8, 8.5, 9) of axes
++ TBD: Relevel factors; why not levels from Tables?
++ TBD: Set range (7.8 to 9.2 and tick marks (8, 8.5, 9) of axes.
 + TBD: Move legend in plot? 
 """
 
@@ -95,14 +113,20 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+Chain = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 AlgebraOfGraphics = "~0.5.3"
 Arrow = "~1.6.2"
 CairoMakie = "~0.6.5"
+Chain = "~0.4.8"
+DataFrameMacros = "~0.1.0"
 DataFrames = "~1.2.2"
+StatsBase = "~0.33.10"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -212,6 +236,11 @@ git-tree-sha1 = "f2202b55d816427cd385a9a4f3ffb226bee80f99"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+0"
 
+[[Chain]]
+git-tree-sha1 = "cac464e71767e8a04ceee82a889ca56502795705"
+uuid = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+version = "0.4.8"
+
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "bdc0937269321858ab2a4f288486cb258b9a0af7"
@@ -285,6 +314,12 @@ version = "4.0.4"
 git-tree-sha1 = "ee400abb2298bd13bfc3df1c412ed228061a2385"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.7.0"
+
+[[DataFrameMacros]]
+deps = ["DataFrames"]
+git-tree-sha1 = "508d57ef7b78551cf69c2837d80af5017ce57217"
+uuid = "75880514-38bc-4a95-a458-c2aea5a3a702"
+version = "0.1.0"
 
 [[DataFrames]]
 deps = ["Compat", "DataAPI", "Future", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Reexport", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
@@ -1302,12 +1337,13 @@ version = "3.5.0+0"
 # ╠═8b38927e-11f1-45fd-b630-44113f0aac3d
 # ╠═a8bc0d0e-fc13-4196-95c9-5922ed400cb4
 # ╠═4825ea74-1902-4423-883d-a7b00a2aa359
+# ╠═b172a822-b648-4160-8723-ee67db4f09eb
 # ╟─52b65f0d-f09e-47c8-81b5-624a09bc1c9a
 # ╠═53da799e-f794-42a5-9255-6503fde6dfa0
 # ╟─fa5e6e67-d37b-414d-8f3a-34f623f423af
 # ╠═f27eab8e-5fbd-442c-b4a2-a95b4c29cd52
 # ╟─e61f86b4-2e9e-4522-af2f-b97097e4c95c
-# ╠═27dbedac-3270-4c4b-ba42-3a99c6c54cba
+# ╠═aa1b733a-84d1-4ed9-be47-0c0cdefbc21e
 # ╟─d81256c0-fa19-4926-b723-795cc9f569bc
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
