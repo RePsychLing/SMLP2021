@@ -158,9 +158,12 @@ Obviously, the tradeoff between theoretical motivation and statistical purity is
 
 # ╔═╡ a7d67c88-a2b5-4326-af67-ae038fbaeb19
 contr1 = merge(
+		 # we ise a "dictionary comprehension" to quickly create
+		 # the repeated Grouping() contrasts, then merge that with the
+	     # dictionary containing the other contrasts
 	     Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		 Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"])),
-	     Dict(:Test => SeqDiffCoding(; levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])))
+		 Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"]),
+	          :Test => SeqDiffCoding(; levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])))
 	
 
 # ╔═╡ e41bb345-bd0a-457d-8d57-1e27dde43a63
@@ -245,8 +248,8 @@ The statistical advantage of _HelmertCoding_ is that the resulting contrasts are
 # ╔═╡ 7dca92f9-dcc2-462c-b501-9ecabce74005
 contr2 = merge(
      Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),  	 
-	 Dict(:Sex =>     EffectsCoding( levels=["Girls", "Boys"])),
-	 Dict(:Test => HelmertCoding(
+	 Dict(:Sex =>     EffectsCoding( levels=["Girls", "Boys"]),
+	      :Test => HelmertCoding(
 			       levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])));
 
 # ╔═╡ c8a80ac2-af56-4503-b05d-d727d7bcac12
@@ -278,8 +281,8 @@ The third set of contrasts uses _HypothesisCoding_. _Hypothesis coding_ allows t
 # ╔═╡ 9f8a0809-0189-480b-957a-3d315763f8a4
 contr3 = merge(
 		   Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"])),
-	       Dict(:Test => HypothesisCoding( [-1 -1 -1 -1 +4
+		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"]),
+	            :Test => HypothesisCoding( [-1 -1 -1 -1 +4
 	         							    -1 +1  0  0  0
 	           								 0 -1 +1  0  0
 	           								 0  0 -1 +1  0],
@@ -299,8 +302,8 @@ Anyway, none of the interactions between `age` x `Sex` with the four `Test` cont
 # ╔═╡ 9095f1b1-1810-4f30-a70c-8c3880e8e538
 contr1b = merge(
      Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),  	 
-	 Dict(:Sex =>     EffectsCoding( levels=["Girls", "Boys"])),
-	 Dict(:Test => HypothesisCoding( [-1 +1  0  0  0
+	 Dict(:Sex =>     EffectsCoding( levels=["Girls", "Boys"]),
+	      :Test => HypothesisCoding( [-1 +1  0  0  0
 	         						   0 -1 +1  0  0
 	           					       0  0 -1 +1  0
 	           						   0  0  0 -1 +1],
@@ -360,8 +363,8 @@ PC1 contrasts the worst and the best indicator of physical **health**; PC2 contr
 # ╔═╡ 42984738-dbb3-47a8-bb6e-3a721edef16d
 contr4 = merge(
 		   Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"])),
-	       Dict(:Test => HypothesisCoding( [-1  0  0  0 +1
+		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"]),
+	            :Test => HypothesisCoding( [-1  0  0  0 +1
 	         							    -3 +2 +2 +2 -3
 	           								 0 +2 -1 -1  0
 	           								 0  0 +1 -1  0],
@@ -385,8 +388,8 @@ There is a numerical interaction with a z-value > 2.0 for the first PCA (i.e., `
 # ╔═╡ 786c6ce9-e292-4ced-b358-514b65b0dde2
 contr4b = merge(
 		   Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"])),
-	       Dict(:Test => HypothesisCoding( [.49 -.04  .20  .03 -.85
+		   Dict(:Sex => EffectsCoding(; levels=["Girls", "Boys"]),
+	            :Test => HypothesisCoding( [.49 -.04  .20  .03 -.85
 	         							    .70 -.56 -.21 -.13  .37
 	           								.31  .68 -.56 -.35  .00
 	           								.04  .08  .61 -.78  .13],
