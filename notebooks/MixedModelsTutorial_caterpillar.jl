@@ -8,7 +8,9 @@ using InteractiveUtils
 begin
 	using Arrow
 	using CairoMakie  # for Scatter
+	using Chain
 	using DataFrames
+	using DataFrameMacros
 	using LinearAlgebra
 	using MixedModels
 	using MixedModelsMakie
@@ -41,21 +43,18 @@ The script is structured in three main sections and an Appendix:
 ### 1.0 Packages and functions
 """
 
-# ╔═╡ faafd359-fb38-4f49-9dfd-19cb4f0c5a54
-function viewdf(x)
-	DataFrame(Arrow.Table(take!(Arrow.write(IOBuffer(), x))))
-end
-
 # ╔═╡ ee85abd9-0172-44d3-b03a-c6a780d33c72
 md"""
-### 1.1 Readme for 'EmotikonSubset.rds'
+### 1.1 Readme for './data/fggk21.arrow'
 
-1. Cohort: 9 levels; 2011-2019
-2. School: 46 levels 
-3. Child: 11,566 levels
-4. Sex: 5,893 girls, 5,673 boys
-5. age: test date - middle of month of birthdate (ranges between 7.9 and 9.2)
-6. Test: 5 levels
+Number of scores: 525126
+
+ 1. Cohort: 9 levels; 2011-2019
+ 2. School: 515 levels 
+ 3. Child: 108295 levels; all children are between 8.0 and 8.99 years old
+ 4. Sex: "Girls" (n=55,086), "Boys" (n= 53,209)
+ 5. age: testdate - middle of month of birthdate 
+ 6. Test: 5 levels
      + Endurance (`Run`):  6 minute endurance run [m]; to nearest 9m in 9x18m field
      + Coordination (`Star_r`): star coordination run [m/s]; 9x9m field, 4 x diagonal = 50.912 m
      + Speed(`S20_r`): 20-meters sprint [m/s]
@@ -63,27 +62,46 @@ md"""
      + Muscle power up (`BPT`): 1-kg medicine ball push test [m] 
  7. score - see units
 
-### 1.2 Preprocessing
-#### Read data
+ ### 1.2 Preprocessing
+
+ #### 1.2.1 Read data
 """
 
 # ╔═╡ 39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
-dat = DataFrame(Arrow.Table("data/fggk21_subset.arrow"), copycols=true);
+data = DataFrame(Arrow.Table("./data/fggk21.arrow"))
+
+# ╔═╡ a217903a-ea4d-42af-9997-d7af9078aebc
+md"""
+#### 1.2.3 Extract a stratified subsample 
+
+We extract a random sample of 1000 children from the Sex (2)  x Test (5) cells of the design. Cohort and School are random. 
+"""
+
+# ╔═╡ 134b531c-3210-4366-b492-e97b9b2e836a
+begin
+    dat =
+	@chain data begin
+  	  @transform(:type = :Sex == "female" ? "girl" : "boy")
+   	  @groupby(:Test, :Sex)
+   	  combine(x -> x[sample(1:nrow(x), 1000), :])
+	end
+end
 
 # ╔═╡ 0051ec83-7c30-4d28-9dfa-4c6f5d0259fa
 md"""
-#### Transformations
+#### 1.2.4 Transformations
 """
 
 # ╔═╡ 7440c439-9d4c-494f-9ac6-18c9fb2fe144
 begin
 	transform!(dat, :age, :age => (x -> x .- 8.5) => :a1); # centered age (linear)
-	transform!(dat,  :a1, :a1  => (x -> x.^2) => :a2);     # centered age (quadr.)
 	select!(groupby(dat,  :Test), :, :score => zscore => :zScore); # z-score
 end;
 
-# ╔═╡ 16c3cdaa-49fa-46d5-a844-03094329fe4c
-viewdf(dat)
+# ╔═╡ 3b8e50df-ef01-488a-b3a5-ea648efb07e3
+md"""
+#### 1.2.5 Summary stats
+"""
 
 # ╔═╡ 64cc1f8e-f831-4a53-976f-dc7600b5634d
 # ... by Test and Sex
@@ -91,7 +109,6 @@ begin
 	dat2 = combine(groupby(dat, [:Test, :Sex]), 
                              :score => mean, :score  => std, 
                              :zScore => mean, :zScore => std)
-	viewdf(dat2)
 end
 
 # ╔═╡ c6c6f056-b8b9-4190-ac14-b900bafa04df
@@ -107,8 +124,7 @@ differences between the five neighboring levels of `Test`, that is:
 + H3: `SLJ` - `S20_r` (4-3)
 + H4: `BPT` - `SLJ` (5-4)
 
-Various options for contrast coding are the topic of the *MixedModelsTutorial_contrasts.jl*
-notbebook.
+Various options for contrast coding are the topic of the *MixedModelsTutorial\_contrasts\_emotikon.jl* and *MixedModelsTutorial\_contrasts\_kwdyz.jl* notbebooks.
 """
 
 # ╔═╡ c5326753-a03b-4739-a82e-90ffa7c1ebdb
@@ -281,7 +297,7 @@ These functions are **disabled** at the start of the notebook. The `caterpillar`
 
 # ╔═╡ cbe2197e-12c7-4d55-8817-d25d7b7cc5bd
 md"""
-```julia
+```
 struct RanefInfo{T<:AbstractFloat}
     cnames::Vector{String}
     levels::Vector
@@ -300,8 +316,6 @@ Return a `NamedTuple{fnames(m), NTuple(k, RanefInfo)}` from model `m`
 """
 
 # ╔═╡ 90ce17cc-d497-4605-aa62-be69343e03eb
-md"""
-```julia
 function ranefinfo(m::LinearMixedModel{T}) where {T}
     fn = fnames(m)
     val = sizehint!(RanefInfo[], length(fn))
@@ -318,8 +332,6 @@ function ranefinfo(m::LinearMixedModel{T}) where {T}
     end
     NamedTuple{fn}((val...,))
 end
-```
-"""
 
 # ╔═╡ 2f8e0b3c-2768-457e-9688-1928301871f5
 rem12 = ranefinfo(m12);
@@ -340,8 +352,6 @@ of `r.ranef`, usually the `(Intercept)` random effects.
 
 
 # ╔═╡ d1efb45b-44e4-4a6c-a967-0dc054a5ae83
-md"""
-```julia
 function caterpillar!(f::Figure, r::RanefInfo; orderby=1)
     rr = r.ranef
     vv = view(rr, :, orderby)
@@ -361,8 +371,7 @@ function caterpillar!(f::Figure, r::RanefInfo; orderby=1)
     axs[1].yticks = (y, r.levels[ord])
     f
 end
-```
-"""
+
 
 # ╔═╡ 64e3f006-9120-40a5-97da-8d6694a7cc87
 caterpillar!(Figure(; resolution=(800,400)), ranefinfo(m11).Cohort; orderby=1)
@@ -381,28 +390,24 @@ caterpillar!(Figure(; resolution=(800,800)), rem13.School; orderby=6)
 
 # ╔═╡ 781486fc-79b4-4e2e-9902-c29c3e4460b6
 md"""
-```julia    
-	caterpillar(m::LinearMixedModel, gf::Symbol)
+    caterpillar(m::LinearMixedModel, gf::Symbol)
 Returns a `Figure` of a "caterpillar plot" of the random-effects means and prediction intervals
 A "caterpillar plot" is a horizontal error-bar plot of conditional means and standard deviations
 of the random effects.
-```
 """
 
 # ╔═╡ 28e8dc7f-7841-4651-9119-de785086124a
-md"""
-```julia
 function caterpillar(m::LinearMixedModel, gf::Symbol=first(fnames(m)))
     caterpillar!(Figure(resolution=(1000,800)), ranefinfo(m)[gf])
 end
-```
-"""
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+Chain = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
@@ -413,6 +418,8 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 [compat]
 Arrow = "~1.6.2"
 CairoMakie = "~0.6.5"
+Chain = "~0.4.8"
+DataFrameMacros = "~0.1.0"
 DataFrames = "~1.2.2"
 MixedModels = "~4.1.1"
 MixedModelsMakie = "~0.3.7"
@@ -526,6 +533,11 @@ git-tree-sha1 = "f2202b55d816427cd385a9a4f3ffb226bee80f99"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+0"
 
+[[Chain]]
+git-tree-sha1 = "cac464e71767e8a04ceee82a889ca56502795705"
+uuid = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+version = "0.4.8"
+
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "bdc0937269321858ab2a4f288486cb258b9a0af7"
@@ -611,6 +623,12 @@ version = "4.0.4"
 git-tree-sha1 = "ee400abb2298bd13bfc3df1c412ed228061a2385"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.7.0"
+
+[[DataFrameMacros]]
+deps = ["DataFrames"]
+git-tree-sha1 = "508d57ef7b78551cf69c2837d80af5017ce57217"
+uuid = "75880514-38bc-4a95-a458-c2aea5a3a702"
+version = "0.1.0"
 
 [[DataFrames]]
 deps = ["Compat", "DataAPI", "Future", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Reexport", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
@@ -1697,12 +1715,13 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─eebef932-1d63-41e5-998f-9748379c43af
 # ╠═4ecf1267-aac9-4e8f-a522-5595b1205f43
-# ╠═faafd359-fb38-4f49-9dfd-19cb4f0c5a54
 # ╟─ee85abd9-0172-44d3-b03a-c6a780d33c72
 # ╠═39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
+# ╟─a217903a-ea4d-42af-9997-d7af9078aebc
+# ╠═134b531c-3210-4366-b492-e97b9b2e836a
 # ╟─0051ec83-7c30-4d28-9dfa-4c6f5d0259fa
 # ╠═7440c439-9d4c-494f-9ac6-18c9fb2fe144
-# ╠═16c3cdaa-49fa-46d5-a844-03094329fe4c
+# ╟─3b8e50df-ef01-488a-b3a5-ea648efb07e3
 # ╠═64cc1f8e-f831-4a53-976f-dc7600b5634d
 # ╟─c6c6f056-b8b9-4190-ac14-b900bafa04df
 # ╠═c5326753-a03b-4739-a82e-90ffa7c1ebdb
@@ -1738,12 +1757,12 @@ version = "3.5.0+0"
 # ╟─61cd093e-aa4e-475a-9d62-3ddd3e2b5fd7
 # ╠═205b7fdb-2db6-4c81-a75b-b0729f57735e
 # ╟─10ef55d6-6048-4353-92e5-e4621bfb130e
-# ╟─cbe2197e-12c7-4d55-8817-d25d7b7cc5bd
+# ╠═cbe2197e-12c7-4d55-8817-d25d7b7cc5bd
 # ╟─32acfdf0-ecb6-4acb-904f-d7b963771d6d
-# ╟─90ce17cc-d497-4605-aa62-be69343e03eb
+# ╠═90ce17cc-d497-4605-aa62-be69343e03eb
 # ╟─ffcc35da-25b8-4bee-80d2-93b033584cd4
-# ╟─d1efb45b-44e4-4a6c-a967-0dc054a5ae83
-# ╟─781486fc-79b4-4e2e-9902-c29c3e4460b6
-# ╟─28e8dc7f-7841-4651-9119-de785086124a
+# ╠═d1efb45b-44e4-4a6c-a967-0dc054a5ae83
+# ╠═781486fc-79b4-4e2e-9902-c29c3e4460b6
+# ╠═28e8dc7f-7841-4651-9119-de785086124a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

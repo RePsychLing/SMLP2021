@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.15.1
+# v0.16.0
 
 using Markdown
 using InteractiveUtils
@@ -8,8 +8,11 @@ using InteractiveUtils
 begin
 	using Arrow
 	using CairoMakie
+	using Chain
 	using DataFrames
+	using DataFrameMacros
 	using Statistics
+	using StatsBase
 end
 
 # ╔═╡ e75bd3d6-c55b-4d30-903a-673cae83af2a
@@ -60,21 +63,41 @@ As part of this process the tests and sexes are relabelled.
 The resulting summary table is split by `test`.
 """
 
+# ╔═╡ ea7950b8-03b6-4215-8dd9-8e2e0f5ffb13
+md"""
+We extract a random sample of 100 children from the Sex (2)  x Test (5) cells of the design. Cohort and School are random. 
+"""
+
+# ╔═╡ b7a5cbd4-5272-4f02-9c2a-7905e54ae1a2
+begin
+    dat = 
+	@chain DataFrame(Arrow.Table("./data/fggk21.arrow")) begin
+   	  @groupby(:Test, :Sex)
+   	  combine(x -> x[sample(1:nrow(x), 100), :])
+	  select!(groupby(_,  :Test), :, :score => zscore => :zScore);
+	end
+end
+
 # ╔═╡ 014617eb-12f7-4949-9995-cd100bec9b6c
-sumTestSexAge1 = groupby(   # summary grouped data frame by test, sex and rounded age
+sumTestSexAge = 
+    groupby(   # summary grouped data frame by test, sex and rounded age
 	combine(
 		groupby(
-			select(DataFrame(tbl),
-				:age => (x -> round.(x, digits=1)) => :age1,
-				:Test => (t -> getindex.(Ref(Dict(tlabels)), t)) => :test,
-				:Sex => (s -> ifelse.(s .== "female", "Girls", "Boys")) => :sex,
+			select(dat,
+				:age => (x -> round.(x, digits=1)) => :Age,
+				:Test => (t -> getindex.(Ref(Dict(tlabels)), t)) => :Test,
+				:Sex => (s -> ifelse.(s .== "female", "Girls", "Boys")) => :Sex,
 				:zScore,
 			),
-			[:age1, :sex, :test]),
+			[:Age, :Sex, :Test]),
 		:zScore => mean,
 		),
-	:test,
+	:Test,
 )
+
+# ╔═╡ 1decb2e2-f585-4ca4-82cf-cefcc17b6cc1
+sumTestSexAge
+
 
 # ╔═╡ 5fb4b4f4-5af1-4390-aa68-9ca31b9ca630
 colors = Makie.cgrad(:Dark2_3, 2; categorical=true, rev=true)
@@ -90,13 +113,13 @@ begin
 		Box(fTest[1, i, Top()], backgroundcolor = :gray)
     	Label(fTest[1, i, Top()], lab, padding = (5, 5, 5, 5))
 		# split the subdataframe by sex to plot the points
-		for (idx, df) in enumerate(groupby(sumTestSexAge1[(test = lab,)], :sex))
+		for (idx, df) in enumerate(groupby(sumTestSexAge[(Test = lab,)], :Sex))
 			scatter!(
 				faxs[i],
-				df.age1,
+				df.Age,
 				df.zScore_mean;
 				color=colors[idx],
-				label=first(df.sex))
+				label=first(df.Sex))
 		end
 	end
 	
@@ -115,13 +138,19 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+Chain = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 Arrow = "~1.6.2"
 CairoMakie = "~0.6.5"
+Chain = "~0.4.8"
+DataFrameMacros = "~0.1.0"
 DataFrames = "~1.2.2"
+StatsBase = "~0.33.10"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -225,6 +254,11 @@ git-tree-sha1 = "f2202b55d816427cd385a9a4f3ffb226bee80f99"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+0"
 
+[[Chain]]
+git-tree-sha1 = "cac464e71767e8a04ceee82a889ca56502795705"
+uuid = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+version = "0.4.8"
+
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "bdc0937269321858ab2a4f288486cb258b9a0af7"
@@ -298,6 +332,12 @@ version = "4.0.4"
 git-tree-sha1 = "ee400abb2298bd13bfc3df1c412ed228061a2385"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.7.0"
+
+[[DataFrameMacros]]
+deps = ["DataFrames"]
+git-tree-sha1 = "508d57ef7b78551cf69c2837d80af5017ce57217"
+uuid = "75880514-38bc-4a95-a458-c2aea5a3a702"
+version = "0.1.0"
 
 [[DataFrames]]
 deps = ["Compat", "DataAPI", "Future", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Reexport", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
@@ -1287,7 +1327,10 @@ version = "3.5.0+0"
 # ╟─da2209ab-537a-4c47-9723-5071f02b9af1
 # ╟─546419cf-14fc-4ec4-baca-a99922f0ce14
 # ╟─4cbf6ac4-ef96-43d5-a8ba-a9e2f3bc8bdc
+# ╟─ea7950b8-03b6-4215-8dd9-8e2e0f5ffb13
+# ╠═b7a5cbd4-5272-4f02-9c2a-7905e54ae1a2
 # ╠═014617eb-12f7-4949-9995-cd100bec9b6c
+# ╠═1decb2e2-f585-4ca4-82cf-cefcc17b6cc1
 # ╠═5fb4b4f4-5af1-4390-aa68-9ca31b9ca630
 # ╠═73455f7f-6897-451c-903a-0d1c391ccf40
 # ╟─00000000-0000-0000-0000-000000000001
