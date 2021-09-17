@@ -79,24 +79,25 @@ begin
 end
 
 # ╔═╡ 014617eb-12f7-4949-9995-cd100bec9b6c
-sumTestSexAge1 = 
+sumTestSexAge = 
     groupby(   # summary grouped data frame by test, sex and rounded age
 	combine(
 		groupby(
 			select(dat,
-				:age => (x -> round.(x, digits=1)) => :age1,
-				:Test => (t -> getindex.(Ref(Dict(tlabels)), t)) => :test,
-				:Sex => (s -> ifelse.(s .== "female", "Girls", "Boys")) => :sex,
+				:age => (x -> round.(x, digits=1)) => :Age,
+				:Test => (t -> getindex.(Ref(Dict(tlabels)), t)) => :Test,
+				:Sex => (s -> ifelse.(s .== "female", "Girls", "Boys")) => :Sex,
 				:zScore,
 			),
-			[:age1, :sex, :test]),
+			[:Age, :Sex, :Test]),
 		:zScore => mean,
 		),
-	:test,
+	:Test,
 )
 
 # ╔═╡ 1decb2e2-f585-4ca4-82cf-cefcc17b6cc1
-sumTestSexAge1
+sumTestSexAge
+
 
 # ╔═╡ 5fb4b4f4-5af1-4390-aa68-9ca31b9ca630
 colors = Makie.cgrad(:Dark2_3, 2; categorical=true, rev=true)
@@ -112,13 +113,13 @@ begin
 		Box(fTest[1, i, Top()], backgroundcolor = :gray)
     	Label(fTest[1, i, Top()], lab, padding = (5, 5, 5, 5))
 		# split the subdataframe by sex to plot the points
-		for (idx, df) in enumerate(groupby(sumTestSexAge1[(test = lab,)], :sex))
+		for (idx, df) in enumerate(groupby(sumTestSexAge[(Test = lab,)], :Sex))
 			scatter!(
 				faxs[i],
-				df.age1,
+				df.Age,
 				df.zScore_mean;
 				color=colors[idx],
-				label=first(df.sex))
+				label=first(df.Sex))
 		end
 	end
 	
@@ -1326,7 +1327,7 @@ version = "3.5.0+0"
 # ╟─da2209ab-537a-4c47-9723-5071f02b9af1
 # ╟─546419cf-14fc-4ec4-baca-a99922f0ce14
 # ╟─4cbf6ac4-ef96-43d5-a8ba-a9e2f3bc8bdc
-# ╠═ea7950b8-03b6-4215-8dd9-8e2e0f5ffb13
+# ╟─ea7950b8-03b6-4215-8dd9-8e2e0f5ffb13
 # ╠═b7a5cbd4-5272-4f02-9c2a-7905e54ae1a2
 # ╠═014617eb-12f7-4949-9995-cd100bec9b6c
 # ╠═1decb2e2-f585-4ca4-82cf-cefcc17b6cc1
