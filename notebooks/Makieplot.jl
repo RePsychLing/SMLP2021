@@ -98,6 +98,7 @@ sumTestSexAge =
 # ╔═╡ 1decb2e2-f585-4ca4-82cf-cefcc17b6cc1
 sumTestSexAge
 
+
 # ╔═╡ 5fb4b4f4-5af1-4390-aa68-9ca31b9ca630
 colors = Makie.cgrad(:Dark2_3, 2; categorical=true, rev=true)
 
