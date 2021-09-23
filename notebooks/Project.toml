@@ -1,0 +1,20 @@
+[deps]
+Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+Chain = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+Pluto = "c3e4b0f8-55cb-11ea-2926-15256bba5781"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+
+[compat]
+Arrow = "1.6"
+CSV = "0.8"
+DataFrameMacros = "0.1"
+DataFrames = "1"
+MacroTools = "0.5.8"
+Pluto = "0.16"
+StatsBase = "0.33"
+julia = "1.6"
