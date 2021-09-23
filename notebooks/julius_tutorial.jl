@@ -38,8 +38,8 @@ Number of scores: 525126
 
  # Read the data
 
-data = DataFrame(Arrow.Table("./data/fggk21.arrow"))
-describe(data)
+df = DataFrame(Arrow.Table("./data/fggk21.arrow"))
+describe(df)
 
 #= Extract a stratified subsample
 
@@ -48,7 +48,7 @@ We extract a random sample of 5 children from the Sex (2) x Test (5) cells of th
 =# 
 
 dat =
-	@chain data begin
+	@chain df begin
   	  @transform(:Sex2 = :Sex == "Girls" ? "female" : "male")
    	  @groupby(:Test, :Sex)
    	  combine(x -> x[sample(1:nrow(x), 5), :])
@@ -57,6 +57,7 @@ dat =
 # Three macros:  @transform, @groupby, and @chain -- one at a time
 
 ## transform and @transform -- also note the ternary operator for ifelse
+
 
 ### long
 transform(dat, :Sex =>
@@ -69,8 +70,12 @@ transform(dat, :age => (col -> col .+ 1) => :ageplus)
 
 @transform(dat, :ageplus = :age + 1)
 
+
 @transform(dat, @c :age .- mean(:age))  # @c = columnwise
 
+### version 1 - traditional Julia style
+df1 = DataFrame(Arrow.Table(Downloads.download(url)));
+describe(df1)
 
 ## groupby and @groupby
 @groupby(dat, :Age = round(Int, :age))
@@ -96,7 +101,6 @@ df2 = @chain url begin
     end;
 df2
 describe(df2)
-
 
 ### look behind the scene
 @macroexpand(@chain url begin
