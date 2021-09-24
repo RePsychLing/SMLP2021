@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.16.0
+# v0.16.1
 
 using Markdown
 using InteractiveUtils
@@ -17,23 +17,28 @@ begin
 	using MixedModels
 	using MixedModelsMakie
 	using MixedModelsMakie: simplelinreg
+	using PlutoUI         # user interface tools for Pluto notebooks
+	using Random
 	using Statistics
 	using StatsBase
 	CairoMakie.activate!(type="svg")
+	TableOfContents()
+	Base.show(io::IO, ::MIME"text/html", x::CategoricalArrays.CategoricalValue) = print(io, get(x)) 
 end
 
 # ╔═╡ eebef932-1d63-41e5-998f-9748379c43af
 md"""
-# Mixed Models Tutorial: Basics
+# Mixed Models Tutorial: Basics with Emotikon Project
 
 This script uses a subset of data reported in Fühner, Golle, Granacher, & Kliegl (2021). Age and sex effects in physical fitness components of 108,295 third graders including 515 primary schools and 9 cohorts. [Scientific Reports 11:17566](https://rdcu.be/cwSeR)
-To circumvent delays associated with model fitting we work with models that are less complex than those in the reference publication. All the data to reproduce the models in the publication are used here, too; the script requires only a few changes to specify the more complex models in the paper. 
+To circumvent delays associated with model fitting we work with models that are less complex than those in the reference publication. All the data to reproduce the models in the publication are used here, too; the script requires only a few changes to specify the more complex models in the article. 
 
-The script is structured in three main sections: 
+The script is structured in four main sections: 
 
-1. The **Setup** with reading and examing the data, plotting the main results, and specifying the contrasts for the fixed factor `Test`.
-2. A demonstration of **Model complexification** to determine a random-effect structure appropriate for and supported by the data.
-3. A **Glossary of MixedModels.jl commands** to inspect the information generated for a fitted model object. 
+1. **Setup** with reading and examing the data, plotting the main results, and specifying the contrasts for the fixed factor `Test`
+2. a demonstration of **model complexification** to determine a parsimonious random-effect structure appropriate for and supported by the data, including also a quite elaborate demonstration of **principle component analyses (PCAs)** of levels (scores) and effects,
+3. specification of **nested fixed effects or interactions** in the levels of another, superordinate factors,
+4. a **Glossary of MixedModels.jl commands** to inspect the information generated for a fitted model object. 
 
 ## 1. Setup
 ### 1.0 Packages and functions
@@ -66,92 +71,147 @@ Number of scores: 525126
 # ╔═╡ 39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
 begin
 	df = DataFrame(Arrow.Table("./data/fggk21.arrow"))
+	df.Test = categorical(df.Test)
+    levels!(df.Test, ["Run", "Star_r", "S20_r", "SLJ", "BPT"])
+	recode!(df.Test, "Run" => "Endurance", "Star_r" => "Coordination",
+		               "S20_r" => "Speed", "SLJ" => "PowerLOW", "BPT" => "PowerUP")
 	describe(df)
+end
+
+# ╔═╡ 51b77ca3-374d-4701-b936-b4a40834cf70
+md"""
+#### 1.2.2 Transformations
+We center age at 8.5 years and compute z-scores for each test. With these variables the data frame `df` contains all variables used for the final model in the original publication.
+"""
+
+# ╔═╡ 7440c439-9d4c-494f-9ac6-18c9fb2fe144
+begin
+	transform!(df, :age, :age => (x -> x .- 8.5) => :a1); # centered age (linear)
+	select!(groupby(df,  :Test), :, :score => zscore => :zScore); # z-score
 end
 
 # ╔═╡ 1e6fe7f6-9ce4-4b13-953b-bf7dc532e53a
 md"""
 #### 1.2.3 Extract a stratified subsample 
 
-We extract a random sample of 1000 children from the Sex (2)  x Test (5) cells of the design. Cohort and School are random. 
+For the prupose of the tutorial, we extract a random sample of 1000 observations from each of the Sex (2)  x Test (5) cells of the design. Thus, we eliminate or greatly reduce Child-based correlations. Child, School and Cohort are grouping variables. Traditionally, they are called random factors because the units (levels) of the factor are assumed to be a random sample from the unit population.  
+
+Cohort has only nine "groups" and could have been included with a set of polynomical fixed-effect contrasts rather than a random factor. This choice warrants a short excursion. The secular trends are very different for different tests and require the inclusion of interaction terms with test contrasts (see Figure 4 in [Fühner et al. (2021)](https://rdcu.be/cwSeR). The authors opted to absorb these effects in cohort-related variance components for the test contrasts and address the details of secular changes in a separate analysis. For complex designs we consider it defensible to put factors and covariates that are in theoretical focus of the article in the fixed effects and, if suitable and supported by the data, put them in the RES when they serve the purpose of statistical control of variance not in the theoretical focus.
 """
 
 # ╔═╡ 6e3adecf-98ff-4437-8e16-3854381ca38b
 begin
     dat =
 	@chain df begin
-  	  @transform(:Sex = :Sex == "female" ? "Girls" : "Boys")
    	  @groupby(:Test, :Sex)
-   	  combine(x -> x[sample(1:nrow(x), 1000), :])
+   	  combine(x -> x[sample(MersenneTwister(42), 1:nrow(x), 1000), :])
 	end
 end
 
-# ╔═╡ 51b77ca3-374d-4701-b936-b4a40834cf70
-md"""
-#### 1.2.4 Transformations
+# ╔═╡ 82960c64-afef-437f-abf6-8f406a0e7871
+md"""`MersenneTwister(42)` specifies 42 as the seed for the random number generator to ensure reproducibility of the stratification. The stratified sample is stored in data frame `dat`.
 """
 
-# ╔═╡ 7440c439-9d4c-494f-9ac6-18c9fb2fe144
-begin
-	transform!(dat, :age, :age => (x -> x .- 8.5) => :a1); # centered age (linear)
-	select!(groupby(dat,  :Test), :, :score => zscore => :zScore); # z-score
-end
-
-# ╔═╡ 57693079-d489-4e8c-a745-338ccde7eab1
+# ╔═╡ eea9c588-f5f8-4905-8774-7031162f9be0
 md"""
-### 1.3 Figure: Age x Sex x Test
+### 1.3  No evidence interaction of age x sex x test
+The main results are captured in the figure constructed in this section. We build the figure both for the full data and the stratified subset. 
 
-The main results of relevance for this tutorial are shown in this figure. 
-There are developmental gains within the ninth year of life for each of
-the five tests and the tests differ in the magnitude of these gains. 
-Also boys outperform girls on each test and, again, the sex difference 
-varies across test.
+**Important technical note: We make use of the special feature of Pluto notebooks that cells can be computed _out of order_. The scatter of means displayed in Figures 1 and 2 is computed in the cells of section 1.3.2.** 
+
+#### 1.3.1  Figure(s) of interaction
+The core results of the article are reported in Figure 2 of [Scientific Reports 11:17566](https://rdcu.be/cwSeR). In summary:
+
++ Main effects of age and sex: There are developmental gains in the ninth year of life; boys outperform girls; there is no main effect of test because of z-scores.
++ Interactions of test and age: Tests differ in the magnitude of developmental gain; the slopes are different. 
++ Interactions of test and sex: The sex difference varies with test. 
++ The most distinctive result is the absence of evidence for a test x age x sex interaction; the age slopes for boys and girls are statistically parallel for each of the five tests.
+
+What do the results look like for the stratified subsample? The parallelism is much less clear. The LMM will tell us whether they are statistically parallel for this subset of data. 
+"""
+
+# ╔═╡ a41bc417-3ca7-4f14-be88-5a91d236e88f
+md"""
+_Figure 1._ Performance differences for **full set of data** between 8.0 und 9.2 years by sex in the five physical fitness tests presented as z-transformed data computed separately for each test. _Endurance_ = cardiorespiratory endurance (i.e., 6-min-run test), _Coordination_ = star-run test, _Speed_ = 20-m linear sprint test, 
+_PowerLOW_ = power of lower limbs (i.e., standing long jump test), _PowerUP_ = 
+apower of upper limbs (i.e., ball push test), SD = standard deviation. Points 
+are binned observed child means; lines are simple regression fits to the observations.
+"""
+
+# ╔═╡ 2b1cd9cc-2122-4f2c-b945-7cbd0cd7ebc1
+md"""
+What do the results look like for the stratified subsample? Here the parallelism is much less clear. In the final LMM we test whether the two regression lines in each of the five panels are statistically parallel for this subset of data. That is, we test the interaction of sex and age as nested within the levels of test. These five tests of sex x age interactions are what most people want to know first. 
+
+The theoretical focus of the article, however, is on comparisons between tests displayed next to each other. We ask whether the degree of parallelism is statistically the same for Endurance and Coordination (H1), Coordination and Speed (H2), Speed and PowerLOW (H3), and PowerLow and PowerUP (H4). Hypotheses H1 to H4 require `Sequential Difference` contrasts c1 to c4 for test; they are tested as fixed effects for c1 x age x sex, c2 x age x sex, c3 x age x sex, and c4 x age x sex. 
+"""
+
+# ╔═╡ 67b2aed5-94a8-4821-92c3-2a3988476feb
+describe(dat)
+
+# ╔═╡ 56093005-7728-44e7-b121-39cdefeb33f3
+md"""
+_Figure 2._ Performance differences for **subset of data** between 8.0 und 9.2 years by sex in the five physical fitness tests presented as z-transformed data computed separately for each test. _Endurance_ = cardiorespiratory endurance (i.e., 6-min-run test), _Coordination_ = star-run test, _Speed_ = 20-m linear sprint test, 
+_PowerLOW_ = power of lower limbs (i.e., standing long jump test), _PowerUP_ = 
+apower of upper limbs (i.e., ball push test), SD = standard deviation. Points 
+are binned observed child means; lines are simple regression fits to the observations.
 """
 
 # ╔═╡ 58d561e2-77c0-43c2-990d-008286de4e5c
-md"""#### 1.3.1 Compute means"""
+md"""#### 1.3.2 Compute means
+The means scattered in Figures 1 and 2 are based on age bins of boys' and girls'  test performances. The means are stored in data frames `df2` for the full and `dat2` for the subset.
+"""
+
+# ╔═╡ f80c6440-6bf0-4656-97f5-15b547d724da
+begin
+df2 = combine(
+	groupby(
+		select(df, :, :age => ByRow(x -> round(x; digits=1)) => :age),
+		[:Sex, :Test, :age],
+	),
+	:zScore => mean => :zScore,
+	:zScore => length => :n,
+)
+end
+
+# ╔═╡ a450b88b-9ac4-4d44-9560-9e6d2e0dd8fa
+begin
+	design1 = mapping(:age, :zScore; color = :Sex, col = :Test)
+	lines1 = design1 * linear()
+	means1 = design1 * visual(Scatter, markersize=5)
+	data(df2) * means1 + data(df) * lines1 |> draw
+end
 
 # ╔═╡ e9280e08-ace4-48cd-ad4a-55501f315d6a
-dat2 = groupby(   # summary grouped data frame by test, sex, rounded age
-	 combine(
-		groupby(
-			select(dat,
-				:age => (x -> cut(x, 8)) => :Age,
-				:Sex,
-				:Test,
-				:zScore,
-				:age
-			),
-			[:Age, :Sex, :Test]),
-		:zScore => mean => :zScore,
-		:age => mean => :ageM
-		),
-	:Test
+begin
+dat2 = combine(
+	groupby(
+		select(dat, :, :age => ByRow(x -> round(x; digits=1)) => :age),
+		[:Sex, :Test, :age],
+	),
+	:zScore => mean => :zScore,
+	:zScore => length => :n,
 )
+end
+
+# ╔═╡ 462bd92a-056a-4e5d-8fa6-215784e0fb9d
+begin
+	design2 = mapping(:age, :zScore; color = :Sex, col = :Test)
+	lines2 = design2 * linear()
+	means2 = design2 * visual(Scatter, markersize=5)
+	data(dat2) * means2 + data(dat) * lines2 |> draw
+end
 
 # ╔═╡ 2574cf1c-4a9a-462b-a2f2-d599a8b42ec1
 md"""
 #### 1.3.2 Regression on `age` by `Sex` for each `Test`
-We compute the simple regression for each test for boys and girls using all observations.
+Another set of relevant statistics are the slopes for the regression of performance on age for boys and girls in each of the five tests. The lines in Figures 1 and 2, however, are computed directly from the raw data with the `linear()` command. 
 """
 
-# ╔═╡ a7e68776-7a42-4b4a-b540-f26b8b57d520
+# ╔═╡ 67b42d3f-0afe-4d16-817d-10212f5a5c90
 begin
-	test_names = levels(dat.Test)
-    comp_names = [     # establish order and labels of tbl.Test
-	    "Run" => "Endurance",
-	    "Star_r" => "Coordination",
-	    "S20_r" => "Speed",
-	    "SLJ" => "PowerLOW",
-	    "BPT" => "PowerUP"
-    ]
-end;
-
-# ╔═╡ da044d64-8464-4846-8022-443cf8c9ecfd
-begin
-    lms = DataFrame( 
+    lms1 = DataFrame( 
 	    Sex = repeat(["Boys", "Girls"], inner=5), 
-	    Test = repeat(test_names, outer=2),
+	    Test = repeat(levels(df.Test), outer=2),
 	    GM = .0,
 		age = .0,
 		Estimate = "age_Sex_Text",
@@ -159,30 +219,33 @@ begin
   	for i in 1:10
   	    local test_sex
   	    test_sex = filter(
-			row -> row.Test == lms.Test[i] && row.Sex == lms.Sex[i],
-			dat,
+			row -> row.Test == lms1.Test[i] && row.Sex == lms1.Sex[i],
+			df,
 		)
-  		lms[i, 3:4] = simplelinreg(test_sex.age, test_sex.zScore)
+  		lms1[i, 3:4] = simplelinreg(test_sex.age, test_sex.zScore)
     end
-	lms
+	lms1
 end
 
-# ╔═╡ eea9c588-f5f8-4905-8774-7031162f9be0
-md"""
-#### 1.3.3 Figure 
-The main results of relevance here are shown in Figure 2 of [Scientific Reports 11:17566](https://rdcu.be/cwSeR).
-"""
-
-# ╔═╡ a41bc417-3ca7-4f14-be88-5a91d236e88f
-md"""
-_Figure 1._ Performance differences between 8.0 und 9.2 years by sex 
-in the five physical fitness tests presented as z-transformed data computed
-separately for each test. _Endurance_ = cardiorespiratory endurance (i.e., 6-min-
-run test), _Coordination_ = star-run test, _Speed_ = 20-m linear sprint test, 
-_PowerLOW_ = power of lower limbs (i.e., standing long jump test), _PowerUP_ = 
-apower of upper limbs (i.e., ball push test), SD = standard deviation. Points 
-are binned observed child means; lines are simple regression fits to the observations.
-"""
+# ╔═╡ da044d64-8464-4846-8022-443cf8c9ecfd
+begin
+    lms2 = DataFrame( 
+	    Sex = repeat(["Boys", "Girls"], inner=5), 
+	    Test = repeat(levels(dat.Test), outer=2),
+	    GM = .0,
+		age = .0,
+		Estimate = "age_Sex_Text",
+	)
+  	for i in 1:10
+  	    local test_sex
+  	    test_sex = filter(
+			row -> row.Test == lms2.Test[i] && row.Sex == lms2.Sex[i],
+			dat,
+		)
+  		lms2[i, 3:4] = simplelinreg(test_sex.age, test_sex.zScore)
+    end
+	lms2
+end
 
 # ╔═╡ c6c6f056-b8b9-4190-ac14-b900bafa04df
 md"""
@@ -196,12 +259,29 @@ differences between the five neighboring levels of `Test`, that is:
 + H3: `SLJ` - `S20_r` (4-3)
 + H4: `BPT` - `SLJ` (5-4)
 
-The levels were sorted such that these contrasts map onto four  _a priori_ hypotheses; 
-in other words, they are _theoretically_ motivated pairwise comparisons. 
+The levels were sorted such that these contrasts map onto four  _a priori_ hypotheses; in other words, they are _theoretically_ motivated pairwise comparisons. 
 The motivation also encompasses theoretically motivated interactions with `Sex`. 
 The order of levels can also be explicitly specified during contrast construction. 
 This is very useful if levels are in a different order in the dataframe.
 
+Note that random factors `Child`, `School`, and `Cohort` are declared as `Grouping` variables. Technically, this specification is required for variables with a very large number of levels (e.g., 100K+ children). We recommend the explicit specification for all random factors as a general coding style. 
+
+The first command recodes names indicating the physical fitness components used in the above figures and tables back to the shorter actual test names. This reduces  clutter in LMM outputs. 
+"""
+
+# ╔═╡ c5326753-a03b-4739-a82e-90ffa7c1ebdb
+begin
+recode!(dat.Test, "Endurance" => "Run", "Coordination" => "Star_r",
+		"Speed" => "S20_r", "PowerLOW" => "SLJ", "PowerUP" => "BMT")
+	
+contr = merge(
+       Dict(nm => SeqDiffCoding() for nm in (:Test, :Sex)),
+       Dict(nm => Grouping() for nm in (:Child, :School, :Cohort)),
+   );
+end
+
+# ╔═╡ f65477ea-5227-4c8f-b2af-c11cb46a673c
+md"""
 The statistical disadvantage of _SeqDiffCoding_ is that the contrasts are not orthogonal, 
 that is the contrasts are correlated. This is obvious from the fact that levels 2, 3, 
 and 4 are all used in two contrasts. One consequence of this is that correlation parameters
@@ -216,18 +296,6 @@ that must be considered carefully when planning the analysis.
 Various options for contrast coding are the topic of the *MixedModelsTutorial_contrasts.jl*
 notbebook.
 """
-
-# ╔═╡ c5326753-a03b-4739-a82e-90ffa7c1ebdb
-begin
-	contr = merge(
-        Dict(nm => Grouping() for nm in (:School, :Child, :Cohort)),
-		Dict(:Sex => EffectsCoding(levels=["Girls", "Boys"])),
-	    Dict(:Test => SeqDiffCoding(levels=["Run", "Star_r", "S20_r", "SLJ", "BPT"])),
-        Dict(:TestHC => HelmertCoding(
-				levels=["S20_r", "SLJ", "Star_r", "Run", "BPT"],)
-			),
-	)
-end;
 
 # ╔═╡ f7d6782e-dcd3-423c-a7fe-c125d8e4f810
 md"""
@@ -254,6 +322,15 @@ begin
 	m_ovi = fit(MixedModel, f_ovi, dat, contrasts=contr)
 end
 
+# ╔═╡ d6a4f68a-bf45-4c66-8c3d-242f37874d87
+md"""Is the model singular (overparameterized, degenerate)? In other words: Is the model not supported by the data?"""
+
+# ╔═╡ f797c72c-12da-4f7c-9ad1-2b75f4cf3902
+issingular(m_ovi)
+
+# ╔═╡ d6594f70-f74f-4b8d-bef4-23f71acb469c
+md"""Models varying only intercepts are almost always supported by the data"""
+
 # ╔═╡ 8a302aae-565e-4a5c-8285-881dd36d873d
 md"""
 ### 2.2 LMM `m_zcp`
@@ -271,8 +348,11 @@ begin
 end
 
 # ╔═╡ 5a02bce6-cbd4-4bfa-b47e-f59abaea7003
-md"""Is the model singular (overparameterized, degenerate)? In other words: Is the model **not** supported by the data?"""
+md"""The model estimated variance components is **also** supported by the data."""
 
+
+# ╔═╡ 55130a9b-a9b8-4c8a-923c-3df6e6759c6b
+issingular(m_zcp)
 
 # ╔═╡ 20f1f363-5d4e-45cf-8ed2-dbb97549bc22
 md"""
@@ -290,16 +370,14 @@ begin
 end
 
 # ╔═╡ 4b0bffc1-8b0f-4594-97f6-5449959bd716
-md"""We also need to see the VCs and CPs of the random-effect structure (RES)"""
+md"""We also need to see the VCs and CPs of the random-effect structure (RES)."""
 
 # ╔═╡ efa892f9-aff9-43e1-922d-d09f9062f172
 VarCorr(m_cpx)
 
 # ╔═╡ 565d97ca-99f3-44d5-bca6-49696003a46f
 md"""
-The  CPs associated with `Sex` are very small. Indeed, they could be removed from the LMM. The VC for `Sex`, however, is needed. The specification of these hierarchical  model comparisons within LMM `m_cpx` is left as an online demonstration.
-
-Is the model singular (overparameterized, degenerate)? In other words: Is the model **not** supported by the data?
+The complex model is also supported by the data.
 """
 
 # ╔═╡ 9947810d-8d61-4d12-bf3c-37c8451f9779
@@ -329,7 +407,7 @@ end
 
 # ╔═╡ df57033d-3148-4a0a-9055-d4c8ede2a0d1
 md"""
-Both the additions of VCs and the addition of CPs significantly improved the goodness of fit.
+Both the additions of VCs and the addition of CPs significantly improved the goodness of fit according to deviance and AIC; BIC "prefers" the simple LMM m_ovi.  
 
 #### 2.4.2 Comparing fixed effects of `m_ovi`, `m_zcp`, and `m_cpx`
 
@@ -354,7 +432,12 @@ begin
 end 
 
 # ╔═╡ bebde50e-86dd-4399-99ab-cb6542536825
-m_all.Name;
+m_all.Name
+
+# ╔═╡ 71233622-14f3-45a8-a78b-4fc6ef0198f3
+md"""
+The three models do not differ in fixed-effect estimates, but the z-values tend to decrease with the complexity of the model (i.e., the standard errors are larger). There are few exceptions to the general pattern, but in general it is well known that dropping significant variance components of correlation parameters leads to anti-conservative estimates of fixed effects (e.g., [Schielzeth & Forstmeier, 2009](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2657178/)). 
+"""
 
 # ╔═╡ 0aa76f57-10de-4e84-ae26-858250fb50a7
 md"""### 2.5 Fitting and dealing with an overparameterized LMM
@@ -366,155 +449,206 @@ Here we attempt to fit a full CP matrix for the `Cohort` factor for the reduced 
 # ╔═╡ 09d2c2bb-9ce1-4288-a8b8-a0f67c6ce65a
 begin
 	f_cpxCohort =  @formula zScore ~ 1 + Test * a1 * Sex +
-	                                (1 + Test + a1 + Sex | Cohort)
+	                                (1 + Test | Cohort)
 	m_cpxCohort = fit(MixedModel, f_cpxCohort, dat, contrasts=contr)
 end
-
-# ╔═╡ 57263322-5eb6-4a34-8167-aec88ebf1970
-issingular(m_cpxCohort)
 
 # ╔═╡ 227a7734-161c-4689-9ff4-d12a5d3ac362
 VarCorr(m_cpxCohort)
 
+# ╔═╡ 57263322-5eb6-4a34-8167-aec88ebf1970
+issingular(m_cpxCohort)
+
 # ╔═╡ ca1f28f8-57e8-4e85-aa1e-b184b8dee8f0
-md"""How about the **zero-correlation parameter** (zcp) version of this LMM?"""
+md"""The model is overparameterized with several CPs estimated between |.98| and |1.00|. How about the **zero-correlation parameter** (zcp) version of this LMM?"""
 
 # ╔═╡ d5efd2c3-4890-4067-b6de-fe2aa4198cdb
 begin
 	f_zcpCohort =  @formula zScore ~ 1 + Test * a1 * Sex +
-	                        zerocorr(1 + Test + a1 + Sex| Cohort)
+	                        zerocorr(1 + Test | Cohort)
 	m_zcpCohort = fit(MixedModel, f_zcpCohort, dat, contrasts=contr)
 end
 
 # ╔═╡ 6654f9af-0235-40db-9ebb-05f8264a4f61
 issingular(m_zcpCohort)
 
-# ╔═╡ 45ea65a2-7a32-4da6-9be6-429c20d94283
-VarCorr(m_zcpCohort)
-
 # ╔═╡ 43693b8b-0365-4177-8655-c4c00881d185
-md"""It looks like the problem is with cohort-related variance in the `Sex` effect. Let's take it out.""" 
+md"""This `zcpLMM`  is also singular. Three of the five VCs are estimated as zero. This raises the possibility that LMM `m_ovi` -- already estimated at the beginning --- might fit as well.
+"""
 
-# ╔═╡ 9f998859-add7-4c40-bd05-eab6292733c4
+# ╔═╡ a8267035-17ed-4f28-a5d5-d7729917d7dc
 begin
-	f_zcpCohort_2 =  @formula zScore ~ 1 + Test * a1 * Sex +
-	                          zerocorr(1 + Test + a1| Cohort)
-	m_zcpCohort_2 = fit(MixedModel, f_zcpCohort_2, dat, contrasts=contr)
+	f_oviCohort =  @formula zScore ~ 1 + Test * a1 * Sex + (1 | Cohort)
+	m_oviCohort = fit(MixedModel, f_oviCohort, dat, contrasts=contr)
 end
 
-# ╔═╡ 04584939-9365-4eff-b15f-0f6c5b2b8f89
-issingular(m_zcpCohort_2)
+# ╔═╡ b2e4c600-a4a2-419e-a14b-3ed50dc18724
+issingular(m_oviCohort)
 
 # ╔═╡ 4f34f0c8-ec27-4278-944e-1225f853a371
-md"""This does solve the problem. Does LMM *m_cpxCohort* fit noise relative to the zcp LMMs?"""
-
-# ╔═╡ d98585a6-0d0d-4d5a-8eec-8c79d80745db
-MixedModels.likelihoodratiotest(m_zcpCohort_2, m_zcpCohort, m_cpxCohort)
-
-# ╔═╡ 074ececf-8dff-44cf-85d7-d48118e4e507
-md"""I would answer with "mostly yes".  How about extending the reduced LMM again with CPs? This would be a **parsimonious** LMM."""
-
-# ╔═╡ 510e8f45-7440-4ab4-a672-f91085793e91
-begin
-	f_prmCohort =  @formula zScore ~ 1 + Test * a1 * Sex +  
-	 								(1 + Test + a1| Cohort)
-	m_prmCohort = fit(MixedModel, f_prmCohort, dat, contrasts=contr)
-end
-
-# ╔═╡ c0e0f3f8-fe60-4cc2-88b0-f81ac9154a3c
-issingular(m_prmCohort)
+md"""This solves the problem with singularity. Does LMM `m_zcpCohort` fit noise relative to the LMM `m_oviCohort`?"""
 
 # ╔═╡ a824d97b-e235-4411-a7cf-af123bfe6c4f
-MixedModels.likelihoodratiotest(m_zcpCohort_2, m_prmCohort, m_cpxCohort)
+MixedModels.likelihoodratiotest(m_oviCohort, m_zcpCohort)
 
 # ╔═╡ f992cf2c-b0c0-4a96-a51d-289bb6fbe317
 begin
-	gof_summary2 = DataFrame(dof=dof.([m_zcpCohort_2, m_prmCohort, m_cpxCohort]),
-		deviance=deviance.([m_zcpCohort_2, m_prmCohort, m_cpxCohort]),
-                AIC = aic.([m_zcpCohort_2, m_prmCohort, m_cpxCohort]), 
-		      AICc = aicc.([m_zcpCohort_2, m_prmCohort, m_cpxCohort]), 
-		        BIC = bic.([m_zcpCohort_2, m_prmCohort, m_cpxCohort]))
+	gof_summary2 = DataFrame(dof=dof.([m_oviCohort, m_zcpCohort, m_cpxCohort]),
+		deviance=deviance.([m_oviCohort, m_zcpCohort, m_cpxCohort]),
+                AIC = aic.([m_oviCohort, m_zcpCohort, m_cpxCohort]), 
+		      AICc = aicc.([m_oviCohort, m_zcpCohort, m_cpxCohort]), 
+		        BIC = bic.([m_oviCohort, m_zcpCohort, m_cpxCohort]))
 end
 
-# ╔═╡ 3e16b4fa-6d42-4ac4-9295-9ac04b6b855e
-VarCorr(m_prmCohort)
-
 # ╔═╡ 47fd8482-81b5-4dd9-ac0a-67861a32e7ed
-md"""The decision about model selection will depend on where on the dimension with confirmatory and exploratory poles the analysis is situated."""
+md"""The goodness of fit statistics favor selection of the LMM `m_oviCohort`.
+
+The Cohort-related VCs for the Test contrasts could be estimated reliably for the full data. Thus, the small number of Cohorts does not necessarily prevent the determination of reliable differences between tests across cohorts. What if we include VCs and CPs related to random factors `Child` and `School`?"""
 
 # ╔═╡ e3cf1ee6-b64d-4356-af23-1dd5c7a0fec6
 md"""
 #### 2.6 Fitting the published LMM `m1` to the reduced data
 
-The LMM `m1` reported in Fühner et al. (2021) included random factors for `School`,
+**WARNING: LMMs m1 and m2 take some time to fit, even with only 10,000 observations. You may want to disable the cells in this section until needed (see Actions).** 
+
+LMM `m1` reported in Fühner et al. (2021) included random factors for `School`,
 `Child`, and `Cohort`. The RES for `School` was specified like in LMM `m_cpx`. The
-RES for `Child` included VCs an d CPs for `Test`, but not for linear developmental
+RES for `Child` included VCs and CPs for `Test`, but not for linear developmental
 gain in the ninth year of life `a1` or `Sex`; they are between-`Child` effects. 
 
 The RES for `Cohort` included only VCs, no CPs for `Test`. The _parsimony_ was due
 to the small number of nine levels for this grouping factor. We will check online
 whether a more complex LMM would be supported by the data. 
 
-Here we fit this LMM `m1` for the reduced data. On a MacBook Pro [13 | 15 | 16] this
-takes [303 | 250 | 244 ] s; for LMM `m1a` (i.e., dropping 1 school-relate VC for
-`Sex`), times are  [212 | 165 | 160] s. The corresponding `lme4` times for LMM `m1`
-are [397  | 348 | 195]. 
+Here we fit this LMM `m1` for the reduced data. For a different subset of similar size on MacBook Pro [13 | 15 | 16] this took [303 | 250 | 244 ] s; for LMM `m1a` (i.e., dropping 1 school-relate VC for `Sex`), times are  [212 | 165 | 160] s. The corresponding `lme4` times for LMM `m1` are [397  | 348 | 195]. 
 
-Finally, times for fitting the full set of data --not in this script--, for LMM `m1`are 
-[60 | 62 | 85] minutes (!); for LMM `m1a` the times were [46 | 48 | 34] minutes. It was 
-not possible to fit the full set of data with `lme4`; after about 13 to 18 minutes the 
-program stopped with:  `Error in eval_f(x, ...) : Downdated VtV is not positive definite.`
+Finally, times for fitting the full set of data --not in this script--, for LMM `m1`are [60 | 62 | 85] minutes (!); for LMM `m1a` the times were [46 | 48 | 34] minutes. It was  not possible to fit the full set of data with `lme4`; after about 13 to 18 minutes the  program stopped with:  `Error in eval_f(x, ...) : Downdated VtV is not positive definite.`
 """
-
-
 
 # ╔═╡ 0dd0d060-81b4-4cc0-b306-dda7589adbd2
 begin
-	f1 =  @formula zScore ~ 1 + Test * a1 * Sex +
-	                       (1 + Test + a1 + Sex | School) + (1 + Test | Child) +
-					        zerocorr(1 + Test | Cohort)
+	f1 =  @formula zScore ~ 1 + Test * a1 * Sex + zerocorr(1 + Test | Cohort) +
+	                       (1 + Test + a1 + Sex | School) + (1 + Test | Child) 
 	m1 = fit(MixedModel, f1, dat, contrasts=contr)
 end
-
-# ╔═╡ b8728c1a-b20e-4e88-ba91-927b6272c6d5
-issingular(m1)
 
 # ╔═╡ 5f7a0626-92af-4ec7-aa86-e3559efab511
 VarCorr(m1)
 
-# ╔═╡ 242d5f20-b42a-4043-9fe1-5b272cf60194
-md"""Let's remove the school-related sex VC."""
+# ╔═╡ b8728c1a-b20e-4e88-ba91-927b6272c6d5
+issingular(m1)
 
-# ╔═╡ 1b2d8df1-4de9-4546-a39e-116e00d9ef95
+# ╔═╡ 242d5f20-b42a-4043-9fe1-5b272cf60194
+md"""LMM `m1` is not supported by the data and the sources of singularity appear to be some of the Cohort-related VCs. However, Cohort-related VCs for GM (.02) and the first test contrast (.14) are substantial. Therefore, forcing all Test contrasts  to zero with `(1 | Cohort)` will lead to a substantial drop in goodness of fit. We will demonstrate how to selectively prune a subset of VCs in the RES in a later vignette.  
+
+Here we attempt an alternative parameterization estimating VCs and CPs for test scores rather than test effects by replacing the "1" in the RE terms with "0".
+"""
+
+# ╔═╡ 67e74190-ea65-42a3-a668-6262012b0492
 begin
-	f1a =  @formula zScore ~ 1 + Test * a1 * Sex +
-	                        (1 + Test + a1 | School) + (1 + Test | Child) +
-				    zerocorr(1 + Test | Cohort)
-	m1a = fit(MixedModel, f1a, dat, contrasts=contr)
+	f2 =  @formula zScore ~ 1 + Test * a1 * Sex +
+	                       (0 + Test + a1 + Sex | School) + (0 + Test | Child) +
+	                        zerocorr(0 + Test | Cohort) 
+	m2 = fit(MixedModel, f2, dat, contrasts=contr)
 end
 
-# ╔═╡ a59cb90a-9d16-41d6-a9a6-35b38a08893e
-issingular(m1a)
+# ╔═╡ 25268edb-e253-4246-bc45-a88288e77daf
+md"""**Note: It appears (again?) that the order of RE terms is very critical. In formula `f2` the `zerocorr()` term must be placed last as shown. If it is placed first, School-related and Child-related CPs are estimated/reported (?) as zero. This was not the case for formula `m1`. Thus, it appears to be related to the "0"-intercepts in School and Child terms. Need a reprex.**
+"""
 
-# ╔═╡ 730d919b-30f5-409b-a79f-598e809e368a
-VarCorr(m1a)
+# ╔═╡ f188d9af-c47d-4809-ad6e-d54f9a094067
+VarCorr(m2)
 
-# ╔═╡ abfd9185-b77b-4b60-99f8-9bbb89914a77
-MixedModels.likelihoodratiotest(m1a, m1)
+# ╔═╡ a591bd46-b883-4789-a1b9-4e2b0b3b10a7
+issingular(m2)
 
-# ╔═╡ e3819941-6254-46a1-97d8-7944ef23f1bc
-md"""After removal of the non-significant school-related VC for `Sex` the model is no longer overparameterized for the reduced data set."""
+# ╔═╡ b4a7ae70-8e34-436b-84eb-0174b9ce7ded
+md"""
+With the alternative parameterization of scores the model is supported by data. The fixed-effects profile is not affected (see 2.8 below). 
+"""
+
+# ╔═╡ a70fe575-51ce-45df-a0c0-12205a5efd88
+md"""
+### 2.7 Principle Component Analysis of Random Effect Structure (rePCA)
+
+The `ìssingular()` command is sort of a shortcut for a quick inspection of the principle components (PCs) of the variance-covariance matrix of the RES. With the `MixedModels.PCA()` command, we also obtain information about the amount of cumulative variance accounted for as we add PCs. 
+
+The output also provides PC loadings which may facilitate interpretation of the CP matrices (if estimated). This topic will be picked uo in a separate vignette. See also [Fühner et al. (2021)](https://rdcu.be/cwSeR) for an application.
+
+#### 2.7.1 Effects in RES
+
+For every random factor, `MixedModels.PCA()` extracts as many PCs as there are VCs. Therefore, the cumulation of variance across PCs within a random factor will always add up to 100% -- at the latest with the last VC, but, in the case of overparameterized LMMs, the ceiling will be reached earlier. The final PCs are usually quite small. 
+
+PCs are extracted in the order of the amount of unique variance they account for. The first PC accounts for the largest and the final PC for the least  amount of variance. The number the PCs with percent variance above a certain threshold indicates the number of weighted composites needed and reflects the dimensionality of the orthogonal space within which (almost) all the variance can be accounted for. The weights for forming composite scores are the listed loadings. For ease of interpretation it is often useful to change the sign of some composite scores. 
+
+The PCA for LMM m1 shows again that the five PCs for `Child` each account for more than 0 percent of the variance. For `School`  six of seven PCs and for Cohort three of five PCs have unique variance.
+
+The overparameterization of School might be resolved when the VC for Sex is dropped from the LMM.  The overparameterization of Cohort is remarkable because correlation parameters were forced to zero. Thus, there is ample evidence for overparameterization.
+"""
+
+# ╔═╡ 3cf33a07-62b9-4068-9eea-1c04effe5716
+MixedModels.PCA(m1)
+
+# ╔═╡ 09c7f02c-bd47-4de4-b586-491aa0e3d584
+md"""#### 2.7.2 Scores in RES
+
+The PCA for LMM m2 shows again that the five PCs for `Child` each account for more than 0 percent of the variance -- one of them barely. 
+
+The overparameterization of School no longer exists. It is important to note that the reparameterization to base estimates of VCs and CPs on scores rather than effects applies on to the Test factor; VCs for Sex and age refer to the associated effects. 
+
+The overparameterization of Cohort was also resolved with the alternative parameterization.
+"""
+
+# ╔═╡ 920edea4-f2a0-4c50-af52-326832310802
+md"""### 2.8 Summary of results for stratified subset of data
+
+Returning to theoretical focus of the article, none of the four fixed effects related to age x Sex x test contrast interactions is significant for the subset. The significant main effects of age and Sex, the interaction between age and c4 (`BPT` - `SLJ`), and interactions between sex and three test contrasts (c2, c3, c4) are replicated. Not significant is the sex x (Star_r - Run) interaction.
+"""
+
+# ╔═╡ 4572b20e-19e2-45e8-ba45-d4eb55cd3f4a
+md"""
+## 3. Age x Sex nested in levels of Test
+
+**WARNING: These LMMs take some time to fit, even with only 10,000 children. You may want to disable the cells in this section until needed (see Actions).** 
+
+In this final LMM, we test post-hoc  the sex x age interaction for each of the five tests with nesting the interaction in the levels of test. As this model is a reparameterization of LMM m2, the goodness of fit should not change. 
+"""
+
+# ╔═╡ 801ba580-31c5-4d04-8557-afa86586048f
+
+begin
+f2_nested = @formula zScore ~ 1 + Test + Test & (a1*Sex) +
+							   (1+Test+a1+Sex | School) + (0+Test | Child) + 
+	   							zerocorr(0+Test | Cohort)
+m2_nested = fit(MixedModel, f2_nested, dat, contrasts=contr)
+end
+
+# ╔═╡ ccc3e244-cdc6-42d1-b49a-46b2aca9ac01
+begin
+	gof_summary3 = DataFrame(dof=dof.([m2, m2_nested]),
+		deviance=deviance.([m2, m2_nested]),
+                AIC = aic.([m2, m2_nested]), 
+		      AICc = aicc.([m2, m2_nested]), 
+		        BIC = bic.([m2, m2_nested]))
+end
+
+# ╔═╡ 5c32009c-cd09-4b58-89c1-3688907012f5
+md"""
+**RK: I am surprised that the deviance for the nested model is so different from the corresponding non-nested LMM. Is there a mistake in my code or my understanding?**
+
+The results show that none of the interactions in the panels of Figure 2 is significant.  The size of the interaction effect corrsponds with the visual impression: It is largest for `Endurance`, but below the threshold of significance.
+"""
 
 # ╔═╡ 46e4c42d-fc89-4d12-b700-6c3f087e64ca
 md"""
-## 3. Glossary of _MixedModels.jl_ commands
+## 4. Glossary of _MixedModels.jl_ commands
 
 Here we introduce most of the commands available in the _MixedModels.jl_ 
 package that allow the immediated inspection and analysis of results returned in a fitted _linear_ mixed-effect model. 
 
 Postprocessing related to conditional modes will be dealt with in a different tutorial.
 
-### 3.1 Overall summary statistics
+### 4.1 Overall summary statistics
 
 ```
 + julia> m1.optsum         # MixedModels.OptSummary:  gets all info 
@@ -536,13 +670,13 @@ Postprocessing related to conditional modes will be dealt with in a different tu
 m1.optsum            # MixedModels.OptSummary:  gets all info
 
 # ╔═╡ 117132af-b6bb-4b11-a92d-3fc34aff3a63
-loglikelihood(m_cpx) # StatsBase.loglikelihood: return loglikelihood of the model
+loglikelihood(m1) # StatsBase.loglikelihood: return loglikelihood of the model
 
 # ╔═╡ e707d474-c553-4142-8b40-d6d944cbc58a
-deviance(m_cpx)      # StatsBase.deviance: negative twice the log-likelihood relative to saturated mode`
+deviance(m1)      # StatsBase.deviance: negative twice the log-likelihood relative to saturated mode`
 
 # ╔═╡ ba7c1050-6b29-4dc2-a97b-552bdc259ac0
-objective(m_cpx)    # MixedModels.objective: saturated model not clear: negative twice the log-likelihood
+objective(m1)    # MixedModels.objective: saturated model not clear: negative twice the log-likelihood
 
 # ╔═╡ 80abc5b9-9d9d-4a67-a542-1be2dc1eca0f
 nobs(m1) # n of observations; they are not independent
@@ -558,7 +692,7 @@ bic(m1)  # objective(m1) + dof(m1)*log(nobs(m1))
 
 # ╔═╡ f300cd09-9abe-4dcf-91e2-dbba7e87b8c1
 md"""
-### 3.2 Fixed-effect statistics
+### 4.2 Fixed-effect statistics
 ```
 + julia> coeftable(m1)     # StatsBase.coeftable: fixed-effects statiscs; 
 						     default level=0.95
@@ -607,7 +741,7 @@ propertynames(m1)  # names of available extractors
 
 # ╔═╡ 1ee16dfe-97d6-4958-b9c4-cf2812691057
 md"""
-### 3.3 Covariance parameter estimates
+### 5.3 Covariance parameter estimates
 These commands inform us about the model parameters associated with the RES.
 ```
 + julia> issingular(m1)        # Test singularity for param. vector m1.theta
@@ -624,8 +758,14 @@ These commands inform us about the model parameters associated with the RES.
 # ╔═╡ 7302b067-270f-4d6a-a0c6-fabd46cc72b0
 issingular(m1) # Test if model is singular for paramter vector m1.theta (default)
 
+# ╔═╡ a6286166-7eed-4f8a-9df6-4f389052e679
+issingular(m2)
+
 # ╔═╡ acd9a3eb-6eae-4e09-8932-e44f91e725b4
 VarCorr(m1) # MixedModels.VarCorr: estimates of random-effect structure (RES)
+
+# ╔═╡ b99fd996-a043-41e1-b142-7a91bb6bd9eb
+VarCorr(m2)
 
 # ╔═╡ 1c9de228-93a4-4d1a-82b5-48fe22cfe0f1
 m1.σs      # VCs; m1.sigmas
@@ -636,118 +776,60 @@ m1.θ       # Parameter vector for RES (w/o residual); m1.theta
 # ╔═╡ f0538b16-e32e-4393-81d2-1d0ce271d619
 BlockDescription(m1) #  Description of blocks of A and L in a LinearMixedModel
 
+# ╔═╡ 8715ec4f-53bd-4b7f-8442-74223d3f4ecc
+m2.θ 
+
+# ╔═╡ d2b4b01c-33fd-4f8c-a2b0-c5dd298a5367
+BlockDescription(m2)
+
 # ╔═╡ ae8aae41-58bd-49b6-a56e-d05cad10c22f
 md"""
-### 3.4 Model "predictions" 
-These commands inform us about extracion of conditional modes/means and (co-)variances, that using the model parameters to improve the predictions for units (levels) of the grouping (random) factors. We need this information, e.g., for partial-effect response profiles (e.g., facet plot) or effect profiles (e.g., caterpillar plot), or visualizing the borrowing-strength effect for correlation parameters (e.g., shrinkage plots). 
+### 5.4 Model "predictions" 
+These commands inform us about extracion of conditional modes/means and (co-)variances, that using the model parameters to improve the predictions for units (levels) of the grouping (random) factors. We need this information, e.g., for partial-effect response profiles (e.g., facet plot) or effect profiles (e.g., caterpillar plot), or visualizing the borrowing-strength effect for correlation parameters (e.g., shrinkage plots). We are using the fit of LMM `m2`.
+
 
 ```
-+ julia> 
-+ julia> condVar(m1a)
-+ julia> 
-+ julia> 
++ julia> condVar(m2)
 ```
 
 Some plotting functions are currently available from the `MixedModelsMakie` package or via custom functions.
 
 ```
-+ julia> 
-+ julia> caterpillar!(m1, orderby=1)
-+ julia> shrinkage!(m1)
++ julia> caterpillar!(m2, orderby=1)
++ julia> shrinkage!(m2)
 ```
 
 """
 
 # ╔═╡ 3b24e3f0-4f93-42d5-ba93-eeb23a1e8bd3
-md" #### 3.4.1 Conditional covariances"
+md" #### 5.4.1 Conditional covariances"
 
 # ╔═╡ da3c1ba5-55cf-41f1-8cd6-8b2784532476
+begin
 cv_m1 = condVar(m1)
+cv_m2 = condVar(m2)
+end
 
 # ╔═╡ b2e83fe2-b60d-415d-8577-c0958bfe8d0e
 md"""
 They are hard to look at. Let's take pictures.
-#### 3.4.2 Caterpillar plots
+#### 5.4.2 Caterpillar plots
 """
 
 # ╔═╡ 80feb95f-4eb1-4363-8223-1d42f9c637a9
 begin	# Cohort
-	cm_m1_chrt = ranefinfo(m1)[:Cohort];
-	caterpillar!(Figure(; resolution=(800,400)), cm_m1_chrt; orderby=1)
+	cm_m2_chrt = ranefinfo(m2)[:Cohort];
+	caterpillar!(Figure(; resolution=(800,400)), cm_m2_chrt; orderby=1)
 end
 
 # ╔═╡ e07e768b-a1ba-438a-8082-de818e798565
-md"#### 3.4.2 Shrinkage plots"
-
-# ╔═╡ b044860a-c571-4dcb-bc3c-d5b07fe58695
-shrinkageplot!(Figure(; resolution=(800,800)), m1, :Cohort)
+md"#### 5.4.3 Shrinkage plots"
 
 # ╔═╡ 91db2051-b222-41c4-96c5-a2fa0c977bfa
 md" These are just teasers. We will pick this up in a separate tutorial. Enjoy! "
 
-# ╔═╡ a70fe575-51ce-45df-a0c0-12205a5efd88
-md"""
-## 4. PCA of Random Effect Structure
-### 4.1 Scores in RES
-The correlations are quite different from the full sample, but the PCs looks similar. 
-"""
-
-# ╔═╡ 62596457-7439-4e55-8d18-f667b7871d21
-begin
-	f1cL = @formula zScore ~ 1 + Test*a1*Sex + (0+Test | Child)
-	m1cL = fit(MixedModel, f1cL, dat, contrasts=contr)
-	VarCorr(m1cL)
-end
-
-# ╔═╡ 3cf33a07-62b9-4068-9eea-1c04effe5716
-MixedModels.PCA(m1cL)
-
-# ╔═╡ a6d9ca11-21a3-40c8-9f32-9bbfdc773e49
-md"""
-### 4.2 Effects in RES
-"""
-
-# ╔═╡ d1fc5d61-caf3-4a21-ab8a-68586462a162
-begin
-	f1c = @formula zScore ~ 1 + Test*a1*Sex + (1+Test | Child)
-	m1c = fit(MixedModel, f1c, dat, contrasts=contr)
-	VarCorr(m1c)
-end
-
-# ╔═╡ e46ccadc-3f3c-4704-865f-740bb059ae19
-MixedModels.PCA(m1c)
-
-# ╔═╡ 4572b20e-19e2-45e8-ba45-d4eb55cd3f4a
-md"""
-## 5. Age x Sex nested in levels of test
-WARNING: These LMMs take some time to fit, even with only 10,000 children. You may want to disable the cells in this section until needed (see Actions). 
-"""
-
-# ╔═╡ 1e2d0f82-5209-4406-85d4-a465b12515a7
-# begin
-# f1LL_nested = @formula zScore ~ 0 + Test + Test & (a1*Sex) +
-# 							   (0+Test+a1+Sex | School) +  (0+Test | Child) + 
-#   								zerocorr(0+Test | Cohort);
-# 	m1LL_nested = fit(MixedModel, f1LL_nested, dat, contrasts=contr);
-#     m1LL_nested
-# end
-
-# ╔═╡ 81707893-f1fb-4062-b371-e352e01b28fc
-# begin
-# 	f1LL = @formula zScore ~ 0 + Test*a1*Sex +
-# 	(0+Test+a1+Sex | School) +  (0+Test | Child) + 
-# 	zerocorr(0+Test | Cohort);
-
-# 	m1LL = fit(MixedModel, f1LL, dat, contrasts=contr);
-# 	m1LL
-# end
-
-# ╔═╡ 801ba580-31c5-4d04-8557-afa86586048f
-# begin
-# 	mods2 = [m1LL_nested, m1LL];
-# 	gof_summary3 = DataFrame(dof=dof.(mods2), deviance=deviance.(mods2),
-# 	AIC = aic.(mods2), AICc = aicc.(mods2), BIC = bic.(mods2))
-# end
+# ╔═╡ b044860a-c571-4dcb-bc3c-d5b07fe58695
+shrinkageplot!(Figure(; resolution=(800,800)), m2, :Cohort)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -761,6 +843,8 @@ DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
 MixedModelsMakie = "b12ae82c-6730-437f-aff9-d2c38332a376"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
@@ -774,6 +858,7 @@ DataFrameMacros = "~0.1.1"
 DataFrames = "~1.2.2"
 MixedModels = "~4.3.0"
 MixedModelsMakie = "~0.3.9"
+PlutoUI = "~0.7.10"
 StatsBase = "~0.33.10"
 """
 
@@ -1208,6 +1293,11 @@ git-tree-sha1 = "8a954fed8ac097d5be04921d595f741115c1b2ad"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+0"
 
+[[HypertextLiteral]]
+git-tree-sha1 = "72053798e1be56026b81d4e2682dbe58922e5ec9"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.0"
+
 [[IfElse]]
 git-tree-sha1 = "28e837ff3e7a6c3cdb252ce49fb412c8eb3caeef"
 uuid = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
@@ -1390,7 +1480,7 @@ uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.36.0+0"
 
 [[LinearAlgebra]]
-deps = ["Libdl"]
+deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[Loess]]
@@ -1553,6 +1643,10 @@ git-tree-sha1 = "7937eda4681660b4d6aeeecc2f7e1c81c8ee4e2f"
 uuid = "e7412a2a-1a6e-54c0-be00-318e2571c051"
 version = "1.3.5+0"
 
+[[OpenBLAS_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
+uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+
 [[OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
 git-tree-sha1 = "327f53360fdb54df7ecd01e96ef1983536d1e633"
@@ -1655,6 +1749,12 @@ deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "Stat
 git-tree-sha1 = "2537ed3c0ed5e03896927187f5f2ee6a4ab342db"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
 version = "1.0.14"
+
+[[PlutoUI]]
+deps = ["Base64", "Dates", "HypertextLiteral", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "Suppressor"]
+git-tree-sha1 = "26b4d16873562469a0a1e6ae41d90dec9e51286d"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.10"
 
 [[PolygonOps]]
 git-tree-sha1 = "c031d2332c9a8e1c90eca239385815dc271abb22"
@@ -1877,6 +1977,11 @@ version = "1.7.3"
 deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
 uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 
+[[Suppressor]]
+git-tree-sha1 = "a819d77f31f83e5792a76081eee1ea6342ab8787"
+uuid = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
+version = "0.2.0"
+
 [[TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -2026,6 +2131,10 @@ git-tree-sha1 = "5982a94fcba20f02f42ace44b9894ee2b140fe47"
 uuid = "0ac62f75-1d6f-5e53-bd7c-93b484bb37c0"
 version = "0.15.1+0"
 
+[[libblastrampoline_jll]]
+deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
+uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+
 [[libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
@@ -2070,25 +2179,36 @@ version = "3.5.0+0"
 # ╠═880ea5ac-a851-446e-8da9-d5f9f161a932
 # ╟─ee85abd9-0172-44d3-b03a-c6a780d33c72
 # ╠═39443fb0-64ec-4a87-b072-bc8ad6fa9cf4
-# ╟─1e6fe7f6-9ce4-4b13-953b-bf7dc532e53a
-# ╠═6e3adecf-98ff-4437-8e16-3854381ca38b
 # ╟─51b77ca3-374d-4701-b936-b4a40834cf70
 # ╠═7440c439-9d4c-494f-9ac6-18c9fb2fe144
-# ╟─57693079-d489-4e8c-a745-338ccde7eab1
+# ╟─1e6fe7f6-9ce4-4b13-953b-bf7dc532e53a
+# ╠═6e3adecf-98ff-4437-8e16-3854381ca38b
+# ╟─82960c64-afef-437f-abf6-8f406a0e7871
+# ╟─eea9c588-f5f8-4905-8774-7031162f9be0
+# ╠═a450b88b-9ac4-4d44-9560-9e6d2e0dd8fa
+# ╟─a41bc417-3ca7-4f14-be88-5a91d236e88f
+# ╟─2b1cd9cc-2122-4f2c-b945-7cbd0cd7ebc1
+# ╠═462bd92a-056a-4e5d-8fa6-215784e0fb9d
+# ╠═67b2aed5-94a8-4821-92c3-2a3988476feb
+# ╟─56093005-7728-44e7-b121-39cdefeb33f3
 # ╟─58d561e2-77c0-43c2-990d-008286de4e5c
+# ╠═f80c6440-6bf0-4656-97f5-15b547d724da
 # ╠═e9280e08-ace4-48cd-ad4a-55501f315d6a
 # ╟─2574cf1c-4a9a-462b-a2f2-d599a8b42ec1
-# ╠═a7e68776-7a42-4b4a-b540-f26b8b57d520
+# ╠═67b42d3f-0afe-4d16-817d-10212f5a5c90
 # ╠═da044d64-8464-4846-8022-443cf8c9ecfd
-# ╟─eea9c588-f5f8-4905-8774-7031162f9be0
-# ╟─a41bc417-3ca7-4f14-be88-5a91d236e88f
 # ╟─c6c6f056-b8b9-4190-ac14-b900bafa04df
 # ╠═c5326753-a03b-4739-a82e-90ffa7c1ebdb
+# ╟─f65477ea-5227-4c8f-b2af-c11cb46a673c
 # ╟─f7d6782e-dcd3-423c-a7fe-c125d8e4f810
 # ╠═9a885065-59db-47a0-aa0a-8574f136a834
+# ╟─d6a4f68a-bf45-4c66-8c3d-242f37874d87
+# ╠═f797c72c-12da-4f7c-9ad1-2b75f4cf3902
+# ╟─d6594f70-f74f-4b8d-bef4-23f71acb469c
 # ╟─8a302aae-565e-4a5c-8285-881dd36d873d
 # ╠═c5c3172f-9801-49c8-a915-6c78c7469ae6
 # ╟─5a02bce6-cbd4-4bfa-b47e-f59abaea7003
+# ╠═55130a9b-a9b8-4c8a-923c-3df6e6759c6b
 # ╟─20f1f363-5d4e-45cf-8ed2-dbb97549bc22
 # ╠═2db49116-5045-460b-bb9a-c4544333482e
 # ╟─4b0bffc1-8b0f-4594-97f6-5449959bd716
@@ -2099,38 +2219,41 @@ version = "3.5.0+0"
 # ╠═f6b1dd53-718d-4455-80f3-9fbf14e03f54
 # ╠═2703966a-b129-49de-81d8-6bc8c5048dbe
 # ╟─df57033d-3148-4a0a-9055-d4c8ede2a0d1
-# ╠═cd6623f0-2961-4871-995a-0cc2d75dd320
+# ╟─cd6623f0-2961-4871-995a-0cc2d75dd320
 # ╠═bebde50e-86dd-4399-99ab-cb6542536825
+# ╟─71233622-14f3-45a8-a78b-4fc6ef0198f3
 # ╟─0aa76f57-10de-4e84-ae26-858250fb50a7
 # ╠═09d2c2bb-9ce1-4288-a8b8-a0f67c6ce65a
-# ╠═57263322-5eb6-4a34-8167-aec88ebf1970
 # ╠═227a7734-161c-4689-9ff4-d12a5d3ac362
+# ╠═57263322-5eb6-4a34-8167-aec88ebf1970
 # ╟─ca1f28f8-57e8-4e85-aa1e-b184b8dee8f0
 # ╠═d5efd2c3-4890-4067-b6de-fe2aa4198cdb
 # ╠═6654f9af-0235-40db-9ebb-05f8264a4f61
-# ╠═45ea65a2-7a32-4da6-9be6-429c20d94283
 # ╟─43693b8b-0365-4177-8655-c4c00881d185
-# ╠═9f998859-add7-4c40-bd05-eab6292733c4
-# ╠═04584939-9365-4eff-b15f-0f6c5b2b8f89
+# ╠═a8267035-17ed-4f28-a5d5-d7729917d7dc
+# ╟─b2e4c600-a4a2-419e-a14b-3ed50dc18724
 # ╟─4f34f0c8-ec27-4278-944e-1225f853a371
-# ╠═d98585a6-0d0d-4d5a-8eec-8c79d80745db
-# ╟─074ececf-8dff-44cf-85d7-d48118e4e507
-# ╠═510e8f45-7440-4ab4-a672-f91085793e91
-# ╠═c0e0f3f8-fe60-4cc2-88b0-f81ac9154a3c
 # ╠═a824d97b-e235-4411-a7cf-af123bfe6c4f
 # ╠═f992cf2c-b0c0-4a96-a51d-289bb6fbe317
-# ╠═3e16b4fa-6d42-4ac4-9295-9ac04b6b855e
 # ╟─47fd8482-81b5-4dd9-ac0a-67861a32e7ed
 # ╟─e3cf1ee6-b64d-4356-af23-1dd5c7a0fec6
 # ╠═0dd0d060-81b4-4cc0-b306-dda7589adbd2
-# ╠═b8728c1a-b20e-4e88-ba91-927b6272c6d5
 # ╠═5f7a0626-92af-4ec7-aa86-e3559efab511
+# ╠═b8728c1a-b20e-4e88-ba91-927b6272c6d5
 # ╟─242d5f20-b42a-4043-9fe1-5b272cf60194
-# ╠═1b2d8df1-4de9-4546-a39e-116e00d9ef95
-# ╠═a59cb90a-9d16-41d6-a9a6-35b38a08893e
-# ╠═730d919b-30f5-409b-a79f-598e809e368a
-# ╠═abfd9185-b77b-4b60-99f8-9bbb89914a77
-# ╟─e3819941-6254-46a1-97d8-7944ef23f1bc
+# ╠═67e74190-ea65-42a3-a668-6262012b0492
+# ╟─25268edb-e253-4246-bc45-a88288e77daf
+# ╠═f188d9af-c47d-4809-ad6e-d54f9a094067
+# ╠═a591bd46-b883-4789-a1b9-4e2b0b3b10a7
+# ╟─b4a7ae70-8e34-436b-84eb-0174b9ce7ded
+# ╟─a70fe575-51ce-45df-a0c0-12205a5efd88
+# ╠═3cf33a07-62b9-4068-9eea-1c04effe5716
+# ╟─09c7f02c-bd47-4de4-b586-491aa0e3d584
+# ╟─920edea4-f2a0-4c50-af52-326832310802
+# ╟─4572b20e-19e2-45e8-ba45-d4eb55cd3f4a
+# ╠═801ba580-31c5-4d04-8557-afa86586048f
+# ╠═ccc3e244-cdc6-42d1-b49a-46b2aca9ac01
+# ╟─5c32009c-cd09-4b58-89c1-3688907012f5
 # ╟─46e4c42d-fc89-4d12-b700-6c3f087e64ca
 # ╠═0caf1da1-4d06-49b8-b1b4-d24a860c68d8
 # ╠═117132af-b6bb-4b11-a92d-3fc34aff3a63
@@ -2151,29 +2274,23 @@ version = "3.5.0+0"
 # ╠═815c070a-8cc1-40f3-91bb-7c38f904399b
 # ╠═4eef686a-6943-45a8-8309-e1b264af34b5
 # ╠═89a1cfec-2b87-4bf9-95e3-7c7312069af8
-# ╠═1ee16dfe-97d6-4958-b9c4-cf2812691057
+# ╟─1ee16dfe-97d6-4958-b9c4-cf2812691057
 # ╠═7302b067-270f-4d6a-a0c6-fabd46cc72b0
+# ╠═a6286166-7eed-4f8a-9df6-4f389052e679
 # ╠═acd9a3eb-6eae-4e09-8932-e44f91e725b4
+# ╠═b99fd996-a043-41e1-b142-7a91bb6bd9eb
 # ╠═1c9de228-93a4-4d1a-82b5-48fe22cfe0f1
 # ╠═363dcab6-f9f7-42e7-9de7-6a9616cb060f
 # ╠═f0538b16-e32e-4393-81d2-1d0ce271d619
+# ╠═8715ec4f-53bd-4b7f-8442-74223d3f4ecc
+# ╠═d2b4b01c-33fd-4f8c-a2b0-c5dd298a5367
 # ╟─ae8aae41-58bd-49b6-a56e-d05cad10c22f
 # ╟─3b24e3f0-4f93-42d5-ba93-eeb23a1e8bd3
 # ╠═da3c1ba5-55cf-41f1-8cd6-8b2784532476
 # ╟─b2e83fe2-b60d-415d-8577-c0958bfe8d0e
 # ╠═80feb95f-4eb1-4363-8223-1d42f9c637a9
 # ╟─e07e768b-a1ba-438a-8082-de818e798565
-# ╠═b044860a-c571-4dcb-bc3c-d5b07fe58695
 # ╟─91db2051-b222-41c4-96c5-a2fa0c977bfa
-# ╟─a70fe575-51ce-45df-a0c0-12205a5efd88
-# ╠═62596457-7439-4e55-8d18-f667b7871d21
-# ╠═3cf33a07-62b9-4068-9eea-1c04effe5716
-# ╟─a6d9ca11-21a3-40c8-9f32-9bbfdc773e49
-# ╠═d1fc5d61-caf3-4a21-ab8a-68586462a162
-# ╠═e46ccadc-3f3c-4704-865f-740bb059ae19
-# ╟─4572b20e-19e2-45e8-ba45-d4eb55cd3f4a
-# ╠═1e2d0f82-5209-4406-85d4-a465b12515a7
-# ╠═81707893-f1fb-4062-b371-e352e01b28fc
-# ╠═801ba580-31c5-4d04-8557-afa86586048f
+# ╠═b044860a-c571-4dcb-bc3c-d5b07fe58695
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
