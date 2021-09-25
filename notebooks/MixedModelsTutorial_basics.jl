@@ -46,9 +46,9 @@ The script is structured in four main sections:
 
 # ╔═╡ ee85abd9-0172-44d3-b03a-c6a780d33c72
 md"""
-### 1.1 Readme for './data/fggk21.arrow'
+### 1.1 Readme
 
-Number of scores: 525126
+Number of scores: 525126 in './data/fggk21.arrow'
 
  1. Cohort: 9 levels; 2011-2019
  2. School: 515 levels 
@@ -90,31 +90,57 @@ We center `age` at 8.5 years and compute z-scores for each `Test`. With these va
 begin
 	transform!(df, :age, :age => (x -> x .- 8.5) => :a1); # centered age (linear)
 	select!(groupby(df,  :Test), :, :score => zscore => :zScore); # z-score
+	dfx = df[:, Not(:score)]   # drop score
 end
 
 # ╔═╡ 1e6fe7f6-9ce4-4b13-953b-bf7dc532e53a
 md"""
 #### 1.2.3 Extract a stratified subsample 
 
-For the prupose of the tutorial, we extract a random sample of 1000 observations from each of the `Sex (2)  x Test (5)` cells of the design. Thus, we eliminate or greatly reduce `Child`-based correlations. `Child`, `School`, and `Cohort` are grouping variables. Traditionally, they are called random factors because the units (levels) of the factor are assumed to be a random sample from the population of their units (levels).  
+For the prupose of the tutorial, we extract a random sample of 1000 boys and 1000 girls. `Child`, `School`, and `Cohort` are grouping variables. Traditionally, they are called random factors because the units (levels) of the factor are assumed to be a random sample from the population of their units (levels).  
 
 Cohort has only nine "groups" and could have been included as a set of polynomical fixed-effect contrasts rather than a random factor. This choice warrants a short excursion: The secular trends are very different for different tests and require the inclusion of interaction terms with `Test` contrasts (see Figure 4 in [Fühner et al. (2021)](https://rdcu.be/cwSeR). The authors opted to absorb these effects in cohort-related variance components for the `Test` contrasts and plan to address the details of secular changes in a separate analysis.
 
 For complex designs, when they are in the theoretical focus of an article, factors and covariates should be specified as part of the fixed effects. If they are not in the theoretical focus, but serve as statistical control variables, they could be put in the RES - if supported by the data.
 """
 
-# ╔═╡ 6e3adecf-98ff-4437-8e16-3854381ca38b
+# ╔═╡ 92038a7c-69f6-445d-ba29-03ae4cf9f115
+md"**Unstack:** Data are in the long format. We need them in a child-based wide format -- one row per child"
+
+# ╔═╡ fe027497-7ed1-4780-871b-547d4f466072
+df_w = unstack(dfx, :Test, :zScore)
+
+# ╔═╡ 29d0a540-29ce-43de-9dfe-75e535ff94eb
+md""" **Stratified sampling:** `MersenneTwister(42)` specifies `42` as the seed for the random number generator to ensure reproducibility of the stratification. The stratified sample is stored in data frame `dat`.
+"""
+
+# ╔═╡ b3f32059-0d7b-4b66-8559-7c8a9f4d14d3
+
 begin
-    dat =
-	@chain df begin
-   	  @groupby(:Test, :Sex)
+dat_w =
+	@chain df_w begin
+   	  @groupby(:Sex)
    	  combine(x -> x[sample(MersenneTwister(42), 1:nrow(x), 1000), :])
 	end
 end
 
-# ╔═╡ 82960c64-afef-437f-abf6-8f406a0e7871
-md"""`MersenneTwister(42)` specifies 42 as the seed for the random number generator to ensure reproducibility of the stratification. The stratified sample is stored in data frame `dat`.
-"""
+
+# ╔═╡ 1f71f182-d840-43fd-98e5-721909e67b60
+md" **Stack and configure data:** Now convert back from wide to long format -- one row per observation. We delete 2% rows with missing data." 
+
+# ╔═╡ cf28cee0-7a33-4910-988a-d60aba25522e
+begin
+	dat = stack(dat_w, 7:11);
+	rename!(dat, :variable => :Test, :value => :zScore);
+	dropmissing!(dat, :zScore)
+	dat.Test = categorical(dat.Test);
+	levels!(dat.Test, ["Endurance", "Coordination", "Speed", 
+			           "PowerLOW", "PowerUP"])
+	nrow(dat)
+end
+
+# ╔═╡ 69b69cfc-fb76-42fb-8074-ca97e26a0773
+describe(dat)
 
 # ╔═╡ eea9c588-f5f8-4905-8774-7031162f9be0
 md"""
@@ -329,7 +355,7 @@ md"""Is the model singular (overparameterized, degenerate)? In other words: Is t
 issingular(m_ovi)
 
 # ╔═╡ d6594f70-f74f-4b8d-bef4-23f71acb469c
-md"""Models varying only intercepts are almost always supported by the data"""
+md"""Models varying only in intercepts are almost always supported by the data"""
 
 # ╔═╡ 8a302aae-565e-4a5c-8285-881dd36d873d
 md"""
@@ -348,7 +374,7 @@ begin
 end
 
 # ╔═╡ 5a02bce6-cbd4-4bfa-b47e-f59abaea7003
-md"""The model estimating variance components is **also** supported by the data."""
+md"""The model estimating variance components for `School` is **also** supported by the data."""
 
 
 # ╔═╡ 55130a9b-a9b8-4c8a-923c-3df6e6759c6b
@@ -380,18 +406,18 @@ issingular(m_cpx)
 
 # ╔═╡ 565d97ca-99f3-44d5-bca6-49696003a46f
 md"""
-The complex model is **not** supported by the data.
+The complex model is **also** supported by the data.
 """
 
 # ╔═╡ f6f8832b-5f62-4762-a8b0-6727e93b21a0
 md"""
 ### 2.4 Model comparisons
 
-The checks of model singularity indicate that two of three models are supported by the data. Does model complexification also increase the goodness of fit or are we only fitting noise?
+The checks of model singularity indicate that the three models are supported by the data. Does model complexification also increase the goodness of fit or are we only fitting noise?
 
 #### 2.4.1 LRT and goodness-of-fit statistics
 
-The models are strictly hierarchically nested. We compare the three LMM with a likelihood-ratio tests (LRT) and AIC and BIC goodness-of-fit statistics.
+As the thee models are strictly hierarchically nested, we compare them with a likelihood-ratio tests (LRT) and AIC and BIC goodness-of-fit statistics derived from them..
 """
 
 
@@ -407,7 +433,7 @@ end
 
 # ╔═╡ df57033d-3148-4a0a-9055-d4c8ede2a0d1
 md"""
-Both the additions of VCs and the addition of CPs significantly improved the goodness of fit according to deviance and AIC; BIC "prefers" the simple LMM `m_ovi`.  
+According to all criteria, adding VCs significantly improved the goodness of fit, but adding CPs was fitting only noise. It is not always the case that the criteria are unanimous in their verdict. 
 
 #### 2.4.2 Comparing fixed effects of `m_ovi`, `m_zcp`, and `m_cpx`
 
@@ -431,17 +457,18 @@ begin
 	m_all3 = hcat(m_all.Name,  m_all2)
 end 
 
-# ╔═╡ bebde50e-86dd-4399-99ab-cb6542536825
-m_all.Name
-
 # ╔═╡ 71233622-14f3-45a8-a78b-4fc6ef0198f3
 md"""
-The three models do not differ in fixed-effect estimates, but the z-values tend to decrease with the complexity of the model (i.e., standard errors are larger). There are few exceptions to the general pattern, but in general it is well known that dropping significant variance components and/or correlation parameters may lead to anti-conservative estimates of fixed effects (e.g., [Schielzeth & Forstmeier, 2009](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2657178/)). 
+The three models do **not** differ in fixed-effect estimates. For main effects of `age` and `Sex`,  z-values decrease strongly with the complexity of the model (i.e., standard errors are larger). For other coefficients, the changes are not very large and not consistent.
+
+In general, dropping significant variance components and/or correlation parameters may lead to anti-conservative estimates of fixed effects (e.g., [Schielzeth & Forstmeier, 2009](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2657178/)). Basically, some of the variance allocated to `age` and `Sex` in LMM `m_ovi` could also be due to differences between schools. This ambiguity increased the uncertainty of the respective fixed effects in the other two LMMs.
 """
 
 # ╔═╡ 0aa76f57-10de-4e84-ae26-858250fb50a7
 md"""### 2.5 Fitting an overparameterized LMM
-The complex LMM is overparameterized; it is not supported by the data. When the number of units (levels) of a grouping factor is small relative to the number of parameters we are trying to estimate, we often end up with such an overparameterized / degenerate RES. As an illustration, we fit a full CP matrix for the `Cohort` factor for the reduced set of data.
+The complex LMM was not overparameterized with respect to `School`, because there are over 400 schools in the data.  When the number of units (levels) of a grouping factor is small relative to the number of parameters we are trying to estimate, we often end up with an overparameterized / degenerate random-effect structure. 
+
+As an illustration, we fit a full CP matrix for the `Cohort`. As there are only nine cohorts in the data, we may be asking too much to estimate 5*6/2 = 15 VC/CP parameters. 
 """
 
 # ╔═╡ 09d2c2bb-9ce1-4288-a8b8-a0f67c6ce65a
@@ -471,7 +498,7 @@ end
 issingular(m_zcpCohort)
 
 # ╔═╡ 43693b8b-0365-4177-8655-c4c00881d185
-md"""This `zcpLMM`  is also singular. Three of the five VCs are estimated as zero. This raises the possibility that LMM `m_ovi` -- already estimated at the beginning --- might fit as well as `zcpLMM`.
+md"""This `zcpLMM`  is also singular. Three of the five VCs are estimated as zero. This raises the possibility that LMM `m_oviCohort`  might fit as well as LMM `m_zcpCohort`.
 """
 
 # ╔═╡ a8267035-17ed-4f28-a5d5-d7729917d7dc
@@ -484,7 +511,7 @@ end
 issingular(m_oviCohort)
 
 # ╔═╡ 4f34f0c8-ec27-4278-944e-1225f853a371
-md"""This solves the problem with singularity. Does LMM `m_zcpCohort` fit noise relative to the LMM `m_oviCohort`?"""
+md"""This solves the problem with singularity, but does LMM `m_zcpCohort` fit noise relative to the LMM `m_oviCohort`?"""
 
 # ╔═╡ a824d97b-e235-4411-a7cf-af123bfe6c4f
 MixedModels.likelihoodratiotest(m_oviCohort, m_zcpCohort)
@@ -499,7 +526,7 @@ begin
 end
 
 # ╔═╡ 47fd8482-81b5-4dd9-ac0a-67861a32e7ed
-md"""Indeed, adding VCs is fitting noise. The goodness of fit statistics favor selection of the LMM `m_oviCohort`.
+md"""Indeed, adding VCs is fitting noise. Again, the goodness of fit statistics unanimously favor the selection of the LMM `m_oviCohort`.
 
 Not shown here, but the `Cohort`-related VCs for the `Test` contrasts could be estimated reliably for the **full** data. Thus, the small number of cohorts does not necessarily prevent the determination of reliable differences between tests across cohorts. What if we include VCs and CPs related to random factors `Child` and `School`?"""
 
@@ -507,7 +534,7 @@ Not shown here, but the `Cohort`-related VCs for the `Test` contrasts could be e
 md"""
 #### 2.6 Fitting the published LMM `m1` to the reduced data
 
-**WARNING: LMMs `m1` and `m2` take some time to fit, even with only 10,000 observations. You may want to disable the cells in this section until needed (see Actions).** 
+**WARNING: The following LMMs `m1`, `m2`, etc. take a bit longer (e.g., close to 6 minutes in the Pluto notebook, close to 3 minutes in the REPL on a MacBook Pro).** 
 
 LMM `m1` reported in Fühner et al. (2021) included random factors for `School`,
 `Child`, and `Cohort`. The RES for `School` was specified like in LMM `m_cpx`. The
@@ -537,7 +564,7 @@ VarCorr(m1)
 issingular(m1)
 
 # ╔═╡ 242d5f20-b42a-4043-9fe1-5b272cf60194
-md"""LMM `m1` is supported by the data. Next we attempt an alternative parameterization estimating VCs and CPs for `Test` scores rather than `Test` effects by replacing the `1 + ...` in the RE terms with `0 + ...`.
+md"""LMM `m1` is supported by the data. We also fit an alternative parameterization, estimating VCs and CPs for `Test` scores rather than `Test` effects by replacing the `1 + ...` in the RE terms with `0 + ...`.
 """
 
 # ╔═╡ 67e74190-ea65-42a3-a668-6262012b0492
@@ -577,13 +604,13 @@ For every random factor, `MixedModels.PCA()` extracts as many PCs as there are V
 
 PCs are extracted in the order of the amount of unique variance they account for. The first PC accounts for the largest and the final PC for the least  amount of variance. The number the PCs with percent variance above a certain threshold indicates the number of weighted composites needed and reflects the dimensionality of the orthogonal space within which (almost) all the variance can be accounted for. The weights for forming composite scores are the listed loadings. For ease of interpretation it is often useful to change the sign of some composite scores. 
 
-The PCA for LMM `m1` shows that the five PCs for `Child` each account for more than 0 percent of the variance; the last PC picks up only 0.25%. 
+The PCA for LMM `m1` shows that each of the five PCs for `Child` accounts for a non-zero percent of unique variance. 
 
 For `School`  only six of seven PCs have unique variance. The overparameterization of `School` might be resolved when the CPs for `Sex` are dropped from the LMM. 
 
-Since `Cohort` was estimated with CPs forced to zero. Therefore, the VCs were forced to be orthogonal; they already represent the PCA solution. 
+`Cohort` was estimated with CPs forced to zero. Therefore, the VCs were forced to be orthogonal; they already represent the PCA solution. 
 
-Importantly the example shows that a non-singular fit does imply that unique variance is associated with all PCs. Embrace uncertainty!
+Importantly the example shows that a non-singular fit does not imply that unique variance is associated with all PCs (i.e., not for last PC for  `School`). Embrace uncertainty!
 """
 
 # ╔═╡ 3cf33a07-62b9-4068-9eea-1c04effe5716
@@ -594,7 +621,9 @@ md"""#### 2.7.2 Scores in RES
 
 Now lets looks at the PCA results for the alternative parameterization of LMM `m2`.  It is important to note that the reparameterization to base estimates of VCs and CPs on scores rather than effects applies only to the `Test` factor (i.e., the first factor in the formula); VCs for `Sex` and `age` refer to the associated effects. 
 
-The PCA for LMM `m2` reveals overparameterization for both `Child` and `School`.  The difference between LMM `m1` and LMM `m2` shows that overparameterization according to PCs may depend on the specification chosen for the other RES. For the **full** data, all PCs in both RES's had unique variance associated with them.
+In the PCA for LMM `m2` the overparameterization for `School` is gone -- although the last PC accounts for what one would consider a trivial .0078% unique variance.  Nevertheless, the difference between LMM `m1` and LMM `m2` shows that overparameterization according to PCs may depend on the specification chosen for the other the random-effect structure. 
+
+For the **full** data, all PCs had unique variance associated with them.
 """
 
 # ╔═╡ 6c350be3-d451-4ee1-a13c-c7b5498f8726
@@ -603,16 +632,14 @@ MixedModels.PCA(m2)
 # ╔═╡ 920edea4-f2a0-4c50-af52-326832310802
 md"""### 2.8 Summary of results for stratified subset of data
 
-Returning to the theoretical focus of the article, none of the four fixed effects related to `age x Sex x Test` contrast interactions is significant for the subset. The significant main effects of `age` and `Sex`, the interaction between `age` and c4 (`BPT` - `SLJ`), and interactions between `Sex` and three test contrasts (c2, c3, c4) are replicated. Not significant is the `Sex x (Star_r - Run)` interaction.
+Returning to the theoretical focus of the article, the significant main effects of `age` and `Sex`, the interactions between `age` and c1 and c4 contrasts and the interactions between `Sex` and three test contrasts (c1, c2, c4) are replicated. Obviously, the subset of data is much noisier than the full set.
 """
 
 # ╔═╡ 4572b20e-19e2-45e8-ba45-d4eb55cd3f4a
 md"""
 ## 3. `Age x Sex` nested in levels of `Test`
 
-**WARNING: These LMMs take some time to fit, even with only 10,000 children. You may want to disable the cells in this section until needed (see Actions).** 
-
-In this final LMM, we test post-hoc  the sex x age interaction for each of the five tests with nesting the interaction in the levels of test. As this model is a reparameterization of LMM m2, the goodness of fit should not change. 
+In this final LMM, we test _post-hoc_  five `age x Sex` interactions by nesting the interaction in the levels of `Test`. As this LMM `m2_nested` is a reparameterization of LMM `m2`. 
 """
 
 # ╔═╡ 801ba580-31c5-4d04-8557-afa86586048f
@@ -626,7 +653,7 @@ end
 
 # ╔═╡ cfc83241-1b91-4baf-8210-a9d48489894d
 md"""
-The results show that none of the interactions in the panels of Figure 2 is significant.  The size of the interaction effect corresponds with the visual impression: It is largest for `Endurance`, but below the threshold of significance.
+The results show that none of the interactions in the panels of Figure 2 is significant.  The size of the interaction effect corresponds with the visual impression: It is largest for `Coordination`, but still below the threshold of significance.
 """
 
 # ╔═╡ de972c0c-ee10-4cf0-a5a5-c99951abee7e
@@ -652,72 +679,30 @@ The results show that none of the interactions in the panels of Figure 2 is sign
 """
 
 # ╔═╡ 5f16f834-167c-41f5-91c3-2830940b179d
-md"""#### Effective degrees of freedom for model and residuals
+md"""#### Geometric degrees of freedom / 
 
 From MixedModels documentation: "The sum of the leverage values is the rank of the model matrix and `n - sum(leverage(m))` is the degrees of freedom for residuals. The sum of the leverage values is also the trace of the so-called "hat" matrix`H`." 
+
+New term: _geometric degrees of freedom_. 
 """
 
 # ╔═╡ 3e9fbde8-b1b4-4691-9346-68f3d416113a
-m1_lev = sum(leverage(m1))  # rank of model matrix, trace of hat matrix, ...
+m1_geomdf = sum(leverage(m1))  # geom_dof
 
 # ╔═╡ 4f05562d-4c9d-4133-b529-347d5bf9519a
-sum(leverage(m2))           # ... reasonable effective degrees of freedom
+sum(leverage(m2))          
 
 # ╔═╡ fb64580e-8fd0-4c2e-b9f8-9b1a4915bfc4
 sum(leverage(m2_nested))
 
-# ╔═╡ f58ae065-dcd8-4282-acaa-0cbfc8a57b33
-dof_residual(m1)                # effective residual degrees of freedom
-
 # ╔═╡ 5b6ffa3a-6ce8-4db4-8b5d-d017c11760dd
-n- m1_lev
+n - m1_geomdf
 
 # ╔═╡ f6b03391-e248-4e8d-b2fd-dbd7dab206f9
 m1.feterm.rank
 
-# ╔═╡ 437b401d-5a03-447e-bf7e-fd8cb8e9dc85
-dof_residual(m1)
-
 # ╔═╡ 1a26069b-6df7-4e96-8d3d-24e520946c4e
 dof(m1)
-
-# ╔═╡ 6c1d1588-e268-459c-b5ef-f8e87c1ce60a
-
-
-# ╔═╡ ee05fff6-fd96-43da-b881-81e8da31cd7c
-md"**RK: I probably should ignore `Child` as random factor for the tutorial because the stratified sample is based on observations, not children. Most children contribute only one of their at most five scores.**"
-
-# ╔═╡ 8ef52cdf-e91b-46b9-942c-4ab7138a5279
-begin
-	f1b =  @formula zScore ~ 1 + Test * a1 * Sex + (1 + Test + a1 + Sex | School) + 
-	                zerocorr(1 + Test | Cohort) 
-	m1b = fit(MixedModel, f1b, dat, contrasts=contr)
-end
-
-# ╔═╡ d58c8e87-1f72-44b5-8738-c847cadc4ec1
-begin
-	f2b =  @formula zScore ~ 1 + Test * a1 * Sex + (0 + Test + a1 + Sex | School) + 
-	                zerocorr(0 + Test | Cohort) 
-	m2b = fit(MixedModel, f2b, dat, contrasts=contr)
-end
-
-# ╔═╡ 97275662-5e80-49cd-adcc-ba821f4753bf
-[objective(m1b) objective(m2b)]
-
-# ╔═╡ 161856f0-906a-4cf1-8aa4-32da736eb412
-n2, p2, q2, k2 = size(m1b)
-
-# ╔═╡ 93b6889a-40f8-4cae-a3ce-38cbcc55d299
-m1b_lev = sum(leverage(m1b))
-
-# ╔═╡ 515f7d77-5c4e-40c5-a523-4fec95d875f0
-dof_residual(m1b)
-
-# ╔═╡ d5870c8d-8c5d-48c3-a742-7fff060440ca
-n2 - m1b_lev
-
-# ╔═╡ 6b5dcc4b-6df6-4039-ac3c-8810b3325bea
-
 
 # ╔═╡ 46e4c42d-fc89-4d12-b700-6c3f087e64ca
 md"""
@@ -768,10 +753,10 @@ n_, p_, q_, k_ = size(m1)
 dof(m1)  # n of degrees of freedom is number of model parameters
 
 # ╔═╡ 0f2b176f-64c6-4b90-98fe-5ddfb255dc93
-lev = sum(leverage(m1)) # trace of hat / rank of model matrix / eff. model dof
+geom_df = sum(leverage(m1)) # trace of hat / rank of model matrix / geom dof
 
 # ╔═╡ e2057518-e508-42c0-ba92-c9bb0afeec20
-resid_df = nobs(m1) - lev  # eff. residual degrees of freedom
+resid_df = nobs(m1) - geom_df  # eff. residual degrees of freedom
 
 # ╔═╡ 2a58411c-c975-4477-8e76-0b9b59000e75
 aic(m1)  # objective(m1) + 2*dof(m1)
@@ -919,6 +904,9 @@ md" These are just teasers. We will pick this up in a separate tutorial. Enjoy! 
 
 # ╔═╡ b044860a-c571-4dcb-bc3c-d5b07fe58695
 shrinkageplot!(Figure(; resolution=(800,800)), m1, :Cohort)
+
+# ╔═╡ c4138607-9c46-471e-ad58-c603a7cbdc58
+shrinkageplot!(Figure(; resolution=(800,800)), m2, :Cohort)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2271,8 +2259,13 @@ version = "3.5.0+0"
 # ╟─51b77ca3-374d-4701-b936-b4a40834cf70
 # ╠═7440c439-9d4c-494f-9ac6-18c9fb2fe144
 # ╟─1e6fe7f6-9ce4-4b13-953b-bf7dc532e53a
-# ╠═6e3adecf-98ff-4437-8e16-3854381ca38b
-# ╟─82960c64-afef-437f-abf6-8f406a0e7871
+# ╟─92038a7c-69f6-445d-ba29-03ae4cf9f115
+# ╠═fe027497-7ed1-4780-871b-547d4f466072
+# ╟─29d0a540-29ce-43de-9dfe-75e535ff94eb
+# ╠═b3f32059-0d7b-4b66-8559-7c8a9f4d14d3
+# ╟─1f71f182-d840-43fd-98e5-721909e67b60
+# ╠═cf28cee0-7a33-4910-988a-d60aba25522e
+# ╠═69b69cfc-fb76-42fb-8074-ca97e26a0773
 # ╟─eea9c588-f5f8-4905-8774-7031162f9be0
 # ╠═a450b88b-9ac4-4d44-9560-9e6d2e0dd8fa
 # ╟─a41bc417-3ca7-4f14-be88-5a91d236e88f
@@ -2308,7 +2301,6 @@ version = "3.5.0+0"
 # ╠═2703966a-b129-49de-81d8-6bc8c5048dbe
 # ╟─df57033d-3148-4a0a-9055-d4c8ede2a0d1
 # ╟─cd6623f0-2961-4871-995a-0cc2d75dd320
-# ╠═bebde50e-86dd-4399-99ab-cb6542536825
 # ╟─71233622-14f3-45a8-a78b-4fc6ef0198f3
 # ╟─0aa76f57-10de-4e84-ae26-858250fb50a7
 # ╠═09d2c2bb-9ce1-4288-a8b8-a0f67c6ce65a
@@ -2316,7 +2308,7 @@ version = "3.5.0+0"
 # ╠═57263322-5eb6-4a34-8167-aec88ebf1970
 # ╟─ca1f28f8-57e8-4e85-aa1e-b184b8dee8f0
 # ╠═d5efd2c3-4890-4067-b6de-fe2aa4198cdb
-# ╠═6654f9af-0235-40db-9ebb-05f8264a4f61
+# ╟─6654f9af-0235-40db-9ebb-05f8264a4f61
 # ╟─43693b8b-0365-4177-8655-c4c00881d185
 # ╠═a8267035-17ed-4f28-a5d5-d7729917d7dc
 # ╟─b2e4c600-a4a2-419e-a14b-3ed50dc18724
@@ -2346,25 +2338,13 @@ version = "3.5.0+0"
 # ╟─ccc3e244-cdc6-42d1-b49a-46b2aca9ac01
 # ╠═2825d2e2-7171-45fd-9cc8-8a7fb014e3e2
 # ╟─5c32009c-cd09-4b58-89c1-3688907012f5
-# ╟─5f16f834-167c-41f5-91c3-2830940b179d
+# ╠═5f16f834-167c-41f5-91c3-2830940b179d
 # ╠═3e9fbde8-b1b4-4691-9346-68f3d416113a
 # ╠═4f05562d-4c9d-4133-b529-347d5bf9519a
 # ╠═fb64580e-8fd0-4c2e-b9f8-9b1a4915bfc4
-# ╠═f58ae065-dcd8-4282-acaa-0cbfc8a57b33
 # ╠═5b6ffa3a-6ce8-4db4-8b5d-d017c11760dd
 # ╠═f6b03391-e248-4e8d-b2fd-dbd7dab206f9
-# ╠═437b401d-5a03-447e-bf7e-fd8cb8e9dc85
 # ╠═1a26069b-6df7-4e96-8d3d-24e520946c4e
-# ╠═6c1d1588-e268-459c-b5ef-f8e87c1ce60a
-# ╟─ee05fff6-fd96-43da-b881-81e8da31cd7c
-# ╠═8ef52cdf-e91b-46b9-942c-4ab7138a5279
-# ╠═d58c8e87-1f72-44b5-8738-c847cadc4ec1
-# ╠═97275662-5e80-49cd-adcc-ba821f4753bf
-# ╠═161856f0-906a-4cf1-8aa4-32da736eb412
-# ╠═93b6889a-40f8-4cae-a3ce-38cbcc55d299
-# ╠═515f7d77-5c4e-40c5-a523-4fec95d875f0
-# ╠═d5870c8d-8c5d-48c3-a742-7fff060440ca
-# ╠═6b5dcc4b-6df6-4039-ac3c-8810b3325bea
 # ╟─46e4c42d-fc89-4d12-b700-6c3f087e64ca
 # ╠═0caf1da1-4d06-49b8-b1b4-d24a860c68d8
 # ╠═117132af-b6bb-4b11-a92d-3fc34aff3a63
@@ -2406,5 +2386,6 @@ version = "3.5.0+0"
 # ╟─e07e768b-a1ba-438a-8082-de818e798565
 # ╟─91db2051-b222-41c4-96c5-a2fa0c977bfa
 # ╠═b044860a-c571-4dcb-bc3c-d5b07fe58695
+# ╠═c4138607-9c46-471e-ad58-c603a7cbdc58
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
