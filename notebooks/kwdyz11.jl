@@ -32,7 +32,7 @@ We specify three contrasts for the four-level factor CTR that are derived from s
 
 Unfortunately, a few years after the publication, we determined that the reported LMM is actually singular and that the singularity is linked to a theoretically critical correlation parameter (CP) between the spatial effect and the attraction effect.  Fortunately, there is also a larger dataset `kkl15.arrow` from a replication and extension of this study (Kliegl, Kuschela, & Laubrock, 2015), analyzed with `kkl15.jl` notebook. The critical CP (along with other fixed effects and CPs) was replicated in this study. 
 
-Those analyses were originally reported in the parsimonious mixed-model paper (Bates et al., 2015). Data and R scripts are also available in [R-package RePsychLing](https://github.com/dmbates/RePsychLing/tree/master/data/) (Baayen et al., 2014). In this script and in `kkl15.jl` we provide the corresponding analyses with _MixedModels.jl_.
+Those analyses were originally reported in the parsimonious mixed-model paper [(Bates et al., 2015)](https://arxiv.org/abs/1506.04967). Data and R scripts are also available in [R-package RePsychLing](https://github.com/dmbates/RePsychLing/tree/master/data/) (Baayen et al., 2014). In this script and in `kkl15.jl` we provide the corresponding analyses with _MixedModels.jl_.
 
 ## Packages
 """
@@ -46,10 +46,13 @@ begin
 	dat1 = select(dat1, :subj => :Subj, :tar => :CTR, :rt);
 
 	# Descriptive statistics
-	cellmeans = combine(groupby(dat1, [:CTR]), 
-                             :rt => mean, :rt  => std, :rt => length, 
-                             :rt => (x -> std(x)/sqrt(length(x))) => :rt_semean)
+	descr_stats = combine(groupby(dat1, [:CTR]), 
+                          :rt => mean, :rt  => std, :rt => length, 
+                          :rt => (x -> std(x)/sqrt(length(x))) => :rt_semean)
 end
+
+# ╔═╡ 90b45536-4397-418a-8bea-887a6d5bdff9
+md" **Graph to be done. Still fighting with labels for AlgebraOfGraphics.** "
 
 # ╔═╡ 317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 md"""## Linear mixed model
@@ -67,23 +70,32 @@ begin
 	m1 = fit(MixedModel, formula, dat1, contrasts=cntr1)
 end
 
+# ╔═╡ 9335cbb7-4635-4b40-bb14-8a59a2701389
+VarCorr(m1)
+
+# ╔═╡ 6b1f8ee2-9051-4b24-baa7-75e1c479ede7
+issingular(m1)
+
+# ╔═╡ 2f2e6cc2-a8a0-4278-9d62-d6d755ac0a8b
+MixedModels.PCA(m1)
+
 # ╔═╡ 12e3d62f-0330-440d-9971-19d11c1993e0
 md""" ## Conditional modes
-### Caterpillar plots
+### Caterpillar plot
 """
 
 # ╔═╡ edbf6df5-bca3-4b5f-8c4c-a7c346899319
-begin	# Cohort
-	cm_m1_chrt = ranefinfo(m1)[:Cohort];
-	caterpillar!(Figure(; resolution=(800,400)), cm_m1_chrt; orderby=1)
+begin
+	cm1 = ranefinfo(m1)[:Subj]
+	caterpillar!(Figure(; resolution=(800,1000)), cm1; orderby=2)
 end
 
 # ╔═╡ 2586e36d-36f7-480f-8848-5a4ace1f0b80
-md"""### Shrinkage plots
+md"""### Shrinkage plot
 """
 
 # ╔═╡ 06ba4e03-ecf1-492c-9c47-1dfa1ce2550a
-shrinkageplot!(Figure(; resolution=(800,800)), m1)
+shrinkageplot!(Figure(; resolution=(1000,1000)), m1)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1405,15 +1417,19 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═e53c82d6-6deb-4a2c-a127-9cd6805cc74b
+# ╟─e53c82d6-6deb-4a2c-a127-9cd6805cc74b
 # ╠═c8032155-0298-438c-8d2e-e711ce8a3055
-# ╠═539399d9-1b68-4d90-8e63-ff5f2674c494
+# ╟─539399d9-1b68-4d90-8e63-ff5f2674c494
 # ╠═47e078b0-41ab-4186-8680-aff3a79ea3c7
-# ╠═317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
+# ╟─90b45536-4397-418a-8bea-887a6d5bdff9
+# ╟─317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 # ╠═e87aa1f2-3578-47d1-bc66-3055b395cfe7
-# ╠═12e3d62f-0330-440d-9971-19d11c1993e0
+# ╠═9335cbb7-4635-4b40-bb14-8a59a2701389
+# ╠═6b1f8ee2-9051-4b24-baa7-75e1c479ede7
+# ╠═2f2e6cc2-a8a0-4278-9d62-d6d755ac0a8b
+# ╟─12e3d62f-0330-440d-9971-19d11c1993e0
 # ╠═edbf6df5-bca3-4b5f-8c4c-a7c346899319
-# ╠═2586e36d-36f7-480f-8848-5a4ace1f0b80
+# ╟─2586e36d-36f7-480f-8848-5a4ace1f0b80
 # ╠═06ba4e03-ecf1-492c-9c47-1dfa1ce2550a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
