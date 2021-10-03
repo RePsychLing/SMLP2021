@@ -9,14 +9,20 @@ begin
 	using Arrow
 	using AlgebraOfGraphics
 	using CairoMakie   # for displaying static plots in a Pluto notebook
+	using CategoricalArrays
 	using Chain
 	using DataFrames
 	using DataFrameMacros
 	using MixedModels
 	using MixedModelsMakie
+	using Random
 	using Statistics
 	using StatsBase
+	using AlgebraOfGraphics: density
+	const rng = MersenneTwister(1234321)
 	CairoMakie.activate!(type="svg") # use SVG (other options include PNG)
+	Base.show(io::IO, ::MIME"text/html", 
+		       x::CategoricalArrays.CategoricalValue) = print(io, get(x)) 
 end
 
 # ╔═╡ e53c82d6-6deb-4a2c-a127-9cd6805cc74b
@@ -38,21 +44,49 @@ Those analyses were originally reported in the parsimonious mixed-model paper [(
 """
 
 # ╔═╡ 539399d9-1b68-4d90-8e63-ff5f2674c494
-md" ## Means and graph"
+md" ## Read data, compute and plot means"
 
 # ╔═╡ 47e078b0-41ab-4186-8680-aff3a79ea3c7
 begin
 	dat1 = DataFrame(Arrow.Table("./data/kwdyz11.arrow"))
-	dat1 = select(dat1, :subj => :Subj, :tar => :CTR, :rt);
-
-	# Descriptive statistics
-	descr_stats = combine(groupby(dat1, [:CTR]), 
-                          :rt => mean, :rt  => std, :rt => length, 
-                          :rt => (x -> std(x)/sqrt(length(x))) => :rt_semean)
+	dat1 = select(dat1, :subj => :Subj, :tar => :CTR, :rt)
+	dat1.CTR = categorical(dat1.CTR)
+	levels!(dat1.CTR, ["val", "sod", "dos", "dod"])
+	describe(dat1)
 end
 
-# ╔═╡ 90b45536-4397-418a-8bea-887a6d5bdff9
-md" **Graph to be done. Still fighting with labels for AlgebraOfGraphics.** "
+# ╔═╡ 90259a40-37e6-4fab-bf50-137a1725d8ef
+begin
+	# Descriptive statistics
+	## Subject level
+	dat_subj = combine(groupby(dat1, [:Subj, :CTR]), 
+					   :rt => length => :n, 
+		               :rt => mean => :rt_m,
+		               :rt  => std => :rt_sd);
+	## Condition level
+	dat_cond = combine(groupby(dat_subj, [:CTR]), 
+					   :n => length => :N, 
+		               :rt_m => mean => :rt_M, 
+		               :rt_m  => std => :rt_SD, 
+                       :rt_m => (x -> std(x)/sqrt(length(x))) => :rt_SE)
+end
+
+# ╔═╡ 0c9cab96-1eed-490e-bf82-8e0d5b154f49
+begin
+	geom = visual(BoxPlot, layout_x = 1) + visual(Violin, layout_x = 2)
+	data(dat_subj) * mapping( 
+		:CTR => renamer("val" => "valid cue", 
+		     		    "sod" => "some obj/diff pos", 
+		                "dos" =>  "diff obj/same pos", 
+		                "dod" => "diff obj/diff pos") => "Cue-target relation",     
+		:rt_m => "Reaction time (ms)") * visual(BoxPlot) |> draw
+end
+
+# ╔═╡ 6a4b43f5-b210-4f5a-98df-4bc801a0bca3
+md""" _Figure 1._ Mean reaction times for four cue-target relations. Target appeared at (a) the cued position (valid), (b) on the same, but its other end, (c) on the other rectangle, but at corresponding horizontal/vertical physical distance, or (d) at the other end of the other rectangle, that is $\sqrt{2}$ of horizontal/vertical distance diagonally across from the cue.
+
+As indicated by the error bars, the usual skew of reactions times is present in these data. An analysis based on log-transformed reaction times (also indicated by a _boxcox()_ check of residuals) did not lead to different results (see [Kliegl et al., 2011; Frontiers](https://doi.org/10.3389/fpsyg.2010.00238)) . Therefore, for this tutorial we stick with the reaction times in original time metric.
+"""
 
 # ╔═╡ 317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 md"""## Linear mixed model
@@ -97,17 +131,138 @@ md"""### Shrinkage plot
 # ╔═╡ 06ba4e03-ecf1-492c-9c47-1dfa1ce2550a
 shrinkageplot!(Figure(; resolution=(1000,1000)), m1)
 
+# ╔═╡ 26840ed8-ba75-4036-b1fa-e0a75478c66c
+md""" ## Parametric bootstrap
+
+Here we 
+
++ generate a bootstrap sample
++ compute shortest covergage intervals for the LMM parameters
++ plot densities of bootstrapped parameter estimates for residual, fixed effects, variance components, and correlation parameters
+
+### Generate a bootstrap sample
+
+We generate 10,000 samples for the 15 model parameters (4 fixed effect, 4 VCs, 6 CPs, and 1 residual).
+""" 
+
+# ╔═╡ 408ac3d6-b284-4f2c-b0f9-e26e3d1e4a65
+begin
+	samp = parametricbootstrap(rng, 10_000, m1)
+	dat2 = DataFrame(samp.allpars)
+	first(dat2, 10)
+end
+
+# ╔═╡ 9246caaf-5ec4-480e-878b-f78dd221771a
+nrow(dat2) # 10_000 estimates for each of 15 model parameters 
+
+# ╔═╡ 12bad831-0ec4-4e05-a635-77411b49035d
+md" ### Shortest coverage interval"
+
+# ╔═╡ 208b7a0d-358a-4e9c-b16f-519057137737
+DataFrame(shortestcovint(samp))
+
+# ╔═╡ 282fff3c-b7d2-4066-9f4e-3ce26ca52f17
+md""" ### Comparative density plots of bootstrapped parameter estimates 
+
+#### Residual 
+"""
+
+# ╔═╡ 3e69cba3-f909-4684-96f1-46507a8543d3
+begin
+	let
+	labels = ["missing" => "residual"]
+	data(@subset(dat2, :type == "σ" && :group == "residual")) * 
+	mapping(:value => "Residual") * density() |> draw
+	end
+end
+
+# ╔═╡ 2db34bbe-17c0-497d-b87c-5fcf037844a3
+md""" #### Fixed effects (w/o GM)
+
+The shortest coverage interval for the `GM` ranges from 376 to 404 ms. To keep the plot range small we do not inlcude its density here.
+"""
+
+# ╔═╡ 815145c0-c6f8-4382-97e2-aa9cffe76346
+begin
+	let 
+	labels = [
+		"CTR: sod" => "spatial effect",
+		"CTR: dos" => "object effect",
+		"CTR: dod" => "attraction effect",
+	]
+	data(@subset(dat2, :type == "β" && :names ≠ "(Intercept)")) * 
+	mapping(:value => "Experimental effect size [ms]", 
+	color=:names => renamer(labels) => "Experimental effects") * density() |> draw
+	end
+end
+
+# ╔═╡ 85af52f4-159b-434e-b5d9-087bc17ed927
+md"The densitiies correspond nicely with the shortest coverage intervals."
+
+# ╔═╡ c11b5edf-ea94-42d8-9124-7cd4560e393c
+md""" #### Variance components (VCs)
+
+"""
+
+# ╔═╡ c1ff4976-a090-48d4-b4e1-be46ecd21097
+begin
+	let 
+	labels = [
+		"(Intercept)" => "GM",
+		"CTR: sod" => "spatial effect",
+		"CTR: dos" => "object effect",
+		"CTR: dod" => "attraction effect",
+	]
+	data(@subset(dat2, :type == "σ" && :group == "Subj")) * 
+	mapping(:value => "Standard deviations [ms]", 
+	color=:names => renamer(labels) => "Variance components") * density() |> draw
+	end
+end
+
+# ╔═╡ 4f785e4c-68b1-41a0-9860-02d2823b9c1c
+md" The VC are all very nicely defined. "
+
+# ╔═╡ e6e85964-6627-467b-a722-b68d90ff760d
+md"""
+#### Correlation parameters (CPs)
+"""
+
+# ╔═╡ 4e789694-20a6-4942-9c03-dbbe2b915d94
+begin
+	let
+	labels = [
+		"(Intercept), CTR: sod" => "GM, spatial",
+		"(Intercept), CTR: dos" => "GM, object",
+		"CTR: sod, CTR: dos" => "spatial, object",
+		"(Intercept), CTR: dod" => "GM, attraction",
+		"CTR: sod, CTR: dod" => "spatial, attraction",
+		"CTR: dos, CTR: dod" => "object, attraction"
+		]
+	data(@subset(dat2, :type == "ρ")) * 
+	mapping(:value => "Correlation", color=:names => renamer(labels) => "Correlation parameters") *
+	density() |> draw
+	end
+end
+
+# ╔═╡ a332072a-dbb2-4805-9268-264d3c004a2a
+md"""Two of the CPs stand out positively. First, the correlation between GM and the spatial effect is well defined. Second, the correlation between spatial and attraction effect is close to the 1.0 border. This CP will be replicated with a larger sample in script `kkl15.jl` ((Kliegl, Kuschela, & Laubrock (2015). 
+
+**That's it for now. Have fun!**
+"""
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
 Chain = "8be319e6-bccf-4806-a6f7-6fae938471bc"
 DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
 MixedModelsMakie = "b12ae82c-6730-437f-aff9-d2c38332a376"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
@@ -115,6 +270,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 AlgebraOfGraphics = "~0.5.4"
 Arrow = "~1.6.2"
 CairoMakie = "~0.6.5"
+CategoricalArrays = "~0.10.1"
 Chain = "~0.4.8"
 DataFrameMacros = "~0.1.1"
 DataFrames = "~1.2.2"
@@ -238,6 +394,12 @@ deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll",
 git-tree-sha1 = "f2202b55d816427cd385a9a4f3ffb226bee80f99"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+0"
+
+[[deps.CategoricalArrays]]
+deps = ["DataAPI", "Future", "Missings", "Printf", "Requires", "Statistics", "Unicode"]
+git-tree-sha1 = "fbc5c413a005abdeeb50ad0e54d85d000a1ca667"
+uuid = "324d7699-5711-5eae-9e2f-1d82baa6b597"
+version = "0.10.1"
 
 [[deps.Chain]]
 git-tree-sha1 = "cac464e71767e8a04ceee82a889ca56502795705"
@@ -1419,9 +1581,11 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─e53c82d6-6deb-4a2c-a127-9cd6805cc74b
 # ╠═c8032155-0298-438c-8d2e-e711ce8a3055
-# ╟─539399d9-1b68-4d90-8e63-ff5f2674c494
+# ╠═539399d9-1b68-4d90-8e63-ff5f2674c494
 # ╠═47e078b0-41ab-4186-8680-aff3a79ea3c7
-# ╟─90b45536-4397-418a-8bea-887a6d5bdff9
+# ╠═90259a40-37e6-4fab-bf50-137a1725d8ef
+# ╠═0c9cab96-1eed-490e-bf82-8e0d5b154f49
+# ╟─6a4b43f5-b210-4f5a-98df-4bc801a0bca3
 # ╟─317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 # ╠═e87aa1f2-3578-47d1-bc66-3055b395cfe7
 # ╠═9335cbb7-4635-4b40-bb14-8a59a2701389
@@ -1431,5 +1595,21 @@ version = "3.5.0+0"
 # ╠═edbf6df5-bca3-4b5f-8c4c-a7c346899319
 # ╟─2586e36d-36f7-480f-8848-5a4ace1f0b80
 # ╠═06ba4e03-ecf1-492c-9c47-1dfa1ce2550a
+# ╟─26840ed8-ba75-4036-b1fa-e0a75478c66c
+# ╠═408ac3d6-b284-4f2c-b0f9-e26e3d1e4a65
+# ╠═9246caaf-5ec4-480e-878b-f78dd221771a
+# ╟─12bad831-0ec4-4e05-a635-77411b49035d
+# ╠═208b7a0d-358a-4e9c-b16f-519057137737
+# ╟─282fff3c-b7d2-4066-9f4e-3ce26ca52f17
+# ╠═3e69cba3-f909-4684-96f1-46507a8543d3
+# ╟─2db34bbe-17c0-497d-b87c-5fcf037844a3
+# ╠═815145c0-c6f8-4382-97e2-aa9cffe76346
+# ╟─85af52f4-159b-434e-b5d9-087bc17ed927
+# ╟─c11b5edf-ea94-42d8-9124-7cd4560e393c
+# ╠═c1ff4976-a090-48d4-b4e1-be46ecd21097
+# ╟─4f785e4c-68b1-41a0-9860-02d2823b9c1c
+# ╟─e6e85964-6627-467b-a722-b68d90ff760d
+# ╠═4e789694-20a6-4942-9c03-dbbe2b915d94
+# ╟─a332072a-dbb2-4805-9268-264d3c004a2a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

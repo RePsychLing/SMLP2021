@@ -9,14 +9,20 @@ begin
 	using Arrow
 	using AlgebraOfGraphics
 	using CairoMakie   # for displaying static plots in a Pluto notebook
+	using CategoricalArrays
 	using Chain
 	using DataFrames
 	using DataFrameMacros
 	using MixedModels
 	using MixedModelsMakie
+	using Random
 	using Statistics
 	using StatsBase
+	using AlgebraOfGraphics: density
+	const rng = MersenneTwister(1234321)
 	CairoMakie.activate!(type="svg") # use SVG (other options include PNG)
+	Base.show(io::IO, ::MIME"text/html", 
+		       x::CategoricalArrays.CategoricalValue) = print(io, get(x)) 
 end
 
 # ╔═╡ e53c82d6-6deb-4a2c-a127-9cd6805cc74b
@@ -38,21 +44,51 @@ The analyses were originally reported in the parsimonious mixed-model paper [(Ba
 """
 
 # ╔═╡ 539399d9-1b68-4d90-8e63-ff5f2674c494
-md" ## Means and graph"
+md" ## Read data, compute and plot means"
 
 # ╔═╡ 47e078b0-41ab-4186-8680-aff3a79ea3c7
 begin
 	dat1 = DataFrame(Arrow.Table("./data/kkl15.arrow"))
-	dat1 = select(dat1, :subj => :Subj, :tar => :CTR, :rt);
-
-	# Descriptive statistics
-	descr_stats = combine(groupby(dat1, [:CTR]), 
-                          :rt => mean, :rt  => std, :rt => length, 
-                          :rt => (x -> std(x)/sqrt(length(x))) => :rt_semean)
+	dat1 = select(dat1, :subj => :Subj, :tar => :CTR, :rt)
+	dat1.CTR = categorical(dat1.CTR)
+	levels!(dat1.CTR, ["val", "sod", "dos", "dod"])
+	describe(dat1)
 end
 
 # ╔═╡ 90b45536-4397-418a-8bea-887a6d5bdff9
-md" **Graph to be done. Still fighting with labels for AlgebraOfGraphics.** "
+begin
+	# Descriptive statistics
+	## Subject level
+	dat_subj = combine(groupby(dat1, [:Subj, :CTR]), 
+					   :rt => length => :n, 
+		               :rt => mean => :rt_m,
+		               :rt  => std => :rt_sd);
+	## Condition level
+	dat_cond = combine(groupby(dat_subj, [:CTR]), 
+					   :n => length => :N, 
+		               :rt_m => mean => :rt_M, 
+		               :rt_m  => std => :rt_SD, 
+                       :rt_m => (x -> std(x)/sqrt(length(x))) => :rt_SE)
+end
+
+# ╔═╡ dd297971-1728-48d8-b73e-94d87555355e
+begin
+	geom = visual(BoxPlot, layout_x = 1) + visual(Violin, layout_x = 2)
+	data(dat_subj) * mapping( 
+		:CTR => renamer("val" => "valid cue", 
+		     		    "sod" => "some obj/diff pos", 
+		                "dos" =>  "diff obj/same pos", 
+		                "dod" => "diff obj/diff pos") => "Cue-target relation",     
+		:rt_m => "Reaction time (ms)") * visual(BoxPlot) |> draw
+end
+
+# ╔═╡ c9f1e8a1-217f-4ff5-ad78-a2a8047db41a
+md""" _Figure 1._ Mean reaction times for four cue-target relations. Target appeared at (a) the cued position (valid), (b) on the same, but its other end, (c) on the other rectangle, but at corresponding horizontal/vertical physical distance, or (d) at the other end of the other rectangle, that is $\sqrt{2}$ of horizontal/vertical distance diagonally across from the cue.
+
+There appears to be an outlier that should perhaps be removewd. As indicated by the error bars, the usual skew of reactions times is present in these data. An analysis based on log-transformed reaction times (also indicated by a _boxcox()_ check of residuals) did not lead to different results in the first study (see [Kliegl et al., 2011; Frontiers](https://doi.org/10.3389/fpsyg.2010.00238)). Therefore, for this tutorial we stick with the reaction times in original time metric. 
+
+**To be done: This analysis should not be considered final. We should check model residuals and consider a log-transformation. There are also other conditions in the experiment that should be modeled. They are small or large targets (varied between subjects) and four orientations (vertical/horizontal, diagonal left/right) of rectangles used for cueing (varied within subjects). The effects were modelled and reported in [Bates et al. (2015)](https://arxiv.org/abs/1506.04967).**
+"""
 
 # ╔═╡ 317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 md"""## Linear mixed model
@@ -97,17 +133,131 @@ md"""### Shrinkage plot
 # ╔═╡ 06ba4e03-ecf1-492c-9c47-1dfa1ce2550a
 shrinkageplot!(Figure(; resolution=(1000,1000)), m1)
 
+# ╔═╡ f60ef911-7bd9-4a37-8970-6111df579235
+md""" ## Parametric bootstrap
+
+Here we 
+
++ generate a bootstrap sample
++ compute shortest covergage intervals for the LMM parameters
++ plot densities of bootstrapped parameter estimates for residual, fixed effects, variance components, and correlation parameters
+
+### Generate a bootstrap sample
+
+We generate 10,000 samples for the 15 model parameters (4 fixed effect, 4 VCs, 6 CPs, and 1 residual).
+""" 
+
+# ╔═╡ 19d5fc45-5547-4cef-abb9-19e6636aa162
+begin
+	samp = parametricbootstrap(rng, 10_000, m1)
+	dat2 = DataFrame(samp.allpars)
+	first(dat2, 10)
+end
+
+# ╔═╡ 63dc9d34-8c7c-4dd8-af62-8717e9e73946
+nrow(dat2) # 10_000 estimates for each of 15 model parameters 
+
+# ╔═╡ d600ea54-8848-4c2b-a364-b8dcc42a5491
+md" ### Shortest coverage interval"
+
+# ╔═╡ ecf2d9c6-9e91-4bc7-adec-6b576bd6471f
+md""" ### Comparative density plots of bootstrapped parameter estimates 
+
+#### Residual 
+"""
+
+# ╔═╡ 06a66a4e-792f-4302-8530-75905c4d3922
+begin
+	let
+	labels = ["missing" => "residual"]
+	data(@subset(dat2, :type == "σ" && :group == "residual")) * 
+	mapping(:value => "Residual") * density() |> draw
+	end
+end
+
+# ╔═╡ aa2531f8-3016-4f53-b4f5-68bfb293a192
+md""" #### Fixed effects (w/o GM)
+
+The shortest coverage interval for the `GM` ranges from 376 to 404 ms. To keep the plot range small we do not inlcude its density here.
+"""
+
+
+# ╔═╡ ce5cfe1a-7c90-41be-a489-fba2e25d4b3c
+begin
+	let 
+	labels = [
+		"CTR: sod" => "spatial effect",
+		"CTR: dos" => "object effect",
+		"CTR: dod" => "attraction effect",
+	]
+	data(@subset(dat2, :type == "β" && :names ≠ "(Intercept)")) * 
+	mapping(:value => "Experimental effect size [ms]", 
+	color=:names => renamer(labels) => "Experimental effects") * density() |> draw
+	end
+end
+
+# ╔═╡ 5cf09fc4-7857-4a85-ada3-4980f3d1a571
+md"The densitiies correspond nicely with the shortest coverage intervals."
+
+# ╔═╡ 8ff68199-69ae-4290-872c-f64e8ccc0a24
+begin
+	let 
+	labels = [
+		"(Intercept)" => "GM",
+		"CTR: sod" => "spatial effect",
+		"CTR: dos" => "object effect",
+		"CTR: dod" => "attraction effect",
+	]
+	data(@subset(dat2, :type == "σ" && :group == "Subj")) * 
+	mapping(:value => "Standard deviations [ms]", 
+	color=:names => renamer(labels) => "Variance components") * density() |> draw
+	end
+end
+
+# ╔═╡ 20449205-de59-4f4f-b591-b6b7107772e9
+md" The VC are all very nicely defined. "
+
+# ╔═╡ 7e674218-3bf2-426e-b10b-579719d60a24
+md"""
+#### Correlation parameters (CPs)
+"""
+
+# ╔═╡ c0cc261d-3b48-4fc5-965f-c8b57dc7783c
+begin
+	let
+	labels = [
+		"(Intercept), CTR: sod" => "GM, spatial",
+		"(Intercept), CTR: dos" => "GM, object",
+		"CTR: sod, CTR: dos" => "spatial, object",
+		"(Intercept), CTR: dod" => "GM, attraction",
+		"CTR: sod, CTR: dod" => "spatial, attraction",
+		"CTR: dos, CTR: dod" => "object, attraction"
+		]
+	data(@subset(dat2, :type == "ρ")) * 
+	mapping(:value => "Correlation", color=:names => renamer(labels) => "Correlation parameters") *
+	density() |> draw
+	end
+end
+
+# ╔═╡ e449e136-62ec-4e85-8470-3fdb2d804ce7
+md"""Three CPs stand out positively, the correlation between GM and the spatial effect, GM and attraction effect, and the correlation between spatial and attraction effects. The second CP was positive, but not significant in the first study. The third CP replicates a CP that was judged questionable in script `kwdyz11.jl`. 
+
+**That's it for now. Have fun!**
+"""
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
 Chain = "8be319e6-bccf-4806-a6f7-6fae938471bc"
 DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
 MixedModelsMakie = "b12ae82c-6730-437f-aff9-d2c38332a376"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
@@ -115,6 +265,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 AlgebraOfGraphics = "~0.5.4"
 Arrow = "~1.6.2"
 CairoMakie = "~0.6.5"
+CategoricalArrays = "~0.10.1"
 Chain = "~0.4.8"
 DataFrameMacros = "~0.1.1"
 DataFrames = "~1.2.2"
@@ -238,6 +389,12 @@ deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll",
 git-tree-sha1 = "f2202b55d816427cd385a9a4f3ffb226bee80f99"
 uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
 version = "1.16.1+0"
+
+[[deps.CategoricalArrays]]
+deps = ["DataAPI", "Future", "Missings", "Printf", "Requires", "Statistics", "Unicode"]
+git-tree-sha1 = "fbc5c413a005abdeeb50ad0e54d85d000a1ca667"
+uuid = "324d7699-5711-5eae-9e2f-1d82baa6b597"
+version = "0.10.1"
 
 [[deps.Chain]]
 git-tree-sha1 = "cac464e71767e8a04ceee82a889ca56502795705"
@@ -1421,7 +1578,9 @@ version = "3.5.0+0"
 # ╠═c8032155-0298-438c-8d2e-e711ce8a3055
 # ╟─539399d9-1b68-4d90-8e63-ff5f2674c494
 # ╠═47e078b0-41ab-4186-8680-aff3a79ea3c7
-# ╟─90b45536-4397-418a-8bea-887a6d5bdff9
+# ╠═90b45536-4397-418a-8bea-887a6d5bdff9
+# ╠═dd297971-1728-48d8-b73e-94d87555355e
+# ╟─c9f1e8a1-217f-4ff5-ad78-a2a8047db41a
 # ╟─317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 # ╠═e87aa1f2-3578-47d1-bc66-3055b395cfe7
 # ╠═9335cbb7-4635-4b40-bb14-8a59a2701389
@@ -1431,5 +1590,19 @@ version = "3.5.0+0"
 # ╠═edbf6df5-bca3-4b5f-8c4c-a7c346899319
 # ╟─2586e36d-36f7-480f-8848-5a4ace1f0b80
 # ╠═06ba4e03-ecf1-492c-9c47-1dfa1ce2550a
+# ╟─f60ef911-7bd9-4a37-8970-6111df579235
+# ╠═19d5fc45-5547-4cef-abb9-19e6636aa162
+# ╠═63dc9d34-8c7c-4dd8-af62-8717e9e73946
+# ╠═d600ea54-8848-4c2b-a364-b8dcc42a5491
+# ╟─ecf2d9c6-9e91-4bc7-adec-6b576bd6471f
+# ╠═06a66a4e-792f-4302-8530-75905c4d3922
+# ╟─aa2531f8-3016-4f53-b4f5-68bfb293a192
+# ╠═ce5cfe1a-7c90-41be-a489-fba2e25d4b3c
+# ╟─5cf09fc4-7857-4a85-ada3-4980f3d1a571
+# ╠═8ff68199-69ae-4290-872c-f64e8ccc0a24
+# ╟─20449205-de59-4f4f-b591-b6b7107772e9
+# ╟─7e674218-3bf2-426e-b10b-579719d60a24
+# ╠═c0cc261d-3b48-4fc5-965f-c8b57dc7783c
+# ╟─e449e136-62ec-4e85-8470-3fdb2d804ce7
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
