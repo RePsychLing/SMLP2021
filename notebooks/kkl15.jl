@@ -160,6 +160,9 @@ nrow(dat2) # 10_000 estimates for each of 15 model parameters
 # ╔═╡ d600ea54-8848-4c2b-a364-b8dcc42a5491
 md" ### Shortest coverage interval"
 
+# ╔═╡ 8b158499-04f6-43a2-be6c-7ca5e28e0ce7
+DataFrame(shortestcovint(samp))
+
 # ╔═╡ ecf2d9c6-9e91-4bc7-adec-6b576bd6471f
 md""" ### Comparative density plots of bootstrapped parameter estimates 
 
@@ -263,13 +266,13 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 AlgebraOfGraphics = "~0.5.4"
-Arrow = "~1.6.2"
+Arrow = "~2.1.0"
 CairoMakie = "~0.6.5"
 CategoricalArrays = "~0.10.1"
 Chain = "~0.4.8"
 DataFrameMacros = "~0.1.1"
 DataFrames = "~1.2.2"
-MixedModels = "~4.3.0"
+MixedModels = "~4.4.0"
 MixedModelsMakie = "~0.3.10"
 StatsBase = "~0.33.10"
 """
@@ -321,9 +324,9 @@ version = "3.1.33"
 
 [[deps.Arrow]]
 deps = ["ArrowTypes", "BitIntegers", "CodecLz4", "CodecZstd", "DataAPI", "Dates", "Mmap", "PooledArrays", "SentinelArrays", "Tables", "TimeZones", "UUIDs"]
-git-tree-sha1 = "b00e6eaba895683867728e73af78a00218f0db10"
+git-tree-sha1 = "c70e6a9dc363040d6ff31c8ccbadafc1103ff9c8"
 uuid = "69666777-d1a9-59fb-9406-91d4454c9d45"
-version = "1.6.2"
+version = "2.1.0"
 
 [[deps.ArrowTypes]]
 deps = ["UUIDs"]
@@ -403,9 +406,9 @@ version = "0.4.8"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "e8a30e8019a512e4b6c56ccebc065026624660e8"
+git-tree-sha1 = "a325370b9dd0e6bf5656a6f1a7ae80755f8ccc46"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "1.7.0"
+version = "1.7.2"
 
 [[deps.CodecBzip2]]
 deps = ["Bzip2_jll", "Libdl", "TranscodingStreams"]
@@ -530,9 +533,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.Distributions]]
 deps = ["ChainRulesCore", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns"]
-git-tree-sha1 = "f4efaa4b5157e0cdb8283ae0b5428bc9208436ed"
+git-tree-sha1 = "ff7890c74e2eaffbc0b3741811e3816e64b6343d"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.16"
+version = "0.25.18"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -976,9 +979,9 @@ version = "1.0.2"
 
 [[deps.MixedModels]]
 deps = ["Arrow", "DataAPI", "Distributions", "GLM", "JSON3", "LazyArtifacts", "LinearAlgebra", "Markdown", "NLopt", "PooledArrays", "ProgressMeter", "Random", "SparseArrays", "StaticArrays", "Statistics", "StatsBase", "StatsFuns", "StatsModels", "StructTypes", "Tables"]
-git-tree-sha1 = "a21b216d060abda9ad2cbbc4ac94d085c937f8e0"
+git-tree-sha1 = "fabf97931cbe4eee338d8a4e49e4f56c9f77a987"
 uuid = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
-version = "4.3.0"
+version = "4.4.0"
 
 [[deps.MixedModelsMakie]]
 deps = ["DataFrames", "Distributions", "KernelDensity", "LinearAlgebra", "Makie", "MixedModels", "Printf", "SpecialFunctions", "StatsBase"]
@@ -990,10 +993,10 @@ version = "0.3.10"
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[deps.Mocking]]
-deps = ["ExprTools"]
-git-tree-sha1 = "748f6e1e4de814b101911e64cc12d83a6af66782"
+deps = ["Compat", "ExprTools"]
+git-tree-sha1 = "29714d0a7a8083bba8427a4fbfb00a540c681ce7"
 uuid = "78c3b35d-d492-501b-9361-3d52fe80e533"
-version = "0.7.2"
+version = "0.7.3"
 
 [[deps.MosaicViews]]
 deps = ["MappedArrays", "OffsetArrays", "PaddedViews", "StackViews"]
@@ -1134,9 +1137,9 @@ version = "1.47.0+0"
 
 [[deps.Parsers]]
 deps = ["Dates"]
-git-tree-sha1 = "9d8c00ef7a8d110787ff6f170579846f776133a9"
+git-tree-sha1 = "a8709b968a1ea6abc2dc1967cb1db6ac9a00dfb6"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.0.4"
+version = "2.0.5"
 
 [[deps.Pixman_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1161,9 +1164,9 @@ uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
 version = "1.0.14"
 
 [[deps.PolygonOps]]
-git-tree-sha1 = "c031d2332c9a8e1c90eca239385815dc271abb22"
+git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
 uuid = "647866c9-e3ac-4575-94e7-e3d426903924"
-version = "0.1.1"
+version = "0.1.2"
 
 [[deps.PooledArrays]]
 deps = ["DataAPI", "Future"]
@@ -1179,9 +1182,9 @@ version = "1.2.2"
 
 [[deps.PrettyTables]]
 deps = ["Crayons", "Formatting", "Markdown", "Reexport", "Tables"]
-git-tree-sha1 = "0d1245a357cc61c8cd61934c07447aa569ff22e6"
+git-tree-sha1 = "69fd065725ee69950f3f58eceb6d144ce32d627d"
 uuid = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
-version = "1.1.0"
+version = "1.2.2"
 
 [[deps.Printf]]
 deps = ["Unicode"]
@@ -1229,9 +1232,9 @@ version = "1.2.2"
 
 [[deps.RelocatableFolders]]
 deps = ["SHA", "Scratch"]
-git-tree-sha1 = "0529f4188bc8efee85a7e580aca1c7dff6b103f8"
+git-tree-sha1 = "9a4b7698b59b24003e8475df70c1b83b958b1f62"
 uuid = "05181044-ff0b-4ac5-8273-598c1e38db00"
-version = "0.1.0"
+version = "0.1.1"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
@@ -1334,9 +1337,9 @@ version = "0.3.3"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
-git-tree-sha1 = "3240808c6d463ac46f1c1cd7638375cd22abbccb"
+git-tree-sha1 = "3c76dde64d03699e074ac02eb2e8ba8254d428da"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.2.12"
+version = "1.2.13"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -1393,9 +1396,9 @@ version = "1.0.1"
 
 [[deps.Tables]]
 deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "TableTraits", "Test"]
-git-tree-sha1 = "1162ce4a6c4b7e31e0e6b14486a6986951c73be9"
+git-tree-sha1 = "fed34d0e71b91734bf0a7e10eb1bb05296ddbcd0"
 uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
-version = "1.5.2"
+version = "1.6.0"
 
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
@@ -1413,9 +1416,9 @@ uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.TiffImages]]
 deps = ["ColorTypes", "DocStringExtensions", "FileIO", "FixedPointNumbers", "IndirectArrays", "Inflate", "OffsetArrays", "OrderedCollections", "PkgVersion", "ProgressMeter"]
-git-tree-sha1 = "632a8d4dbbad6627a4d2d21b1c6ebcaeebb1e1ed"
+git-tree-sha1 = "945b8d87c5e8d5e34e6207ee15edb9d11ae44716"
 uuid = "731e570b-9d59-4bfa-96dc-6df516fadf69"
-version = "0.4.2"
+version = "0.4.3"
 
 [[deps.TimeZones]]
 deps = ["Dates", "Future", "LazyArtifacts", "Mocking", "Pkg", "Printf", "RecipesBase", "Serialization", "Unicode"]
@@ -1593,7 +1596,8 @@ version = "3.5.0+0"
 # ╟─f60ef911-7bd9-4a37-8970-6111df579235
 # ╠═19d5fc45-5547-4cef-abb9-19e6636aa162
 # ╠═63dc9d34-8c7c-4dd8-af62-8717e9e73946
-# ╠═d600ea54-8848-4c2b-a364-b8dcc42a5491
+# ╟─d600ea54-8848-4c2b-a364-b8dcc42a5491
+# ╠═8b158499-04f6-43a2-be6c-7ca5e28e0ce7
 # ╟─ecf2d9c6-9e91-4bc7-adec-6b576bd6471f
 # ╠═06a66a4e-792f-4302-8530-75905c4d3922
 # ╟─aa2531f8-3016-4f53-b4f5-68bfb293a192
