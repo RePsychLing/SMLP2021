@@ -48,44 +48,83 @@ md" ## Read data, compute and plot means"
 
 # ╔═╡ 47e078b0-41ab-4186-8680-aff3a79ea3c7
 begin
-	dat1 = DataFrame(Arrow.Table("./data/kkl15.arrow"))
-	dat1 = select(dat1, :subj => :Subj, :tar => :CTR, :rt)
-	dat1.CTR = categorical(dat1.CTR)
+	dat1 = select(DataFrame(Arrow.Table("./data/kkl15.arrow")),
+		:subj => (s -> categorical(string.('S', lpad.(s, 3, '0')))) => :Subj,
+		:tar => categorical => :CTR,
+		:rt)
 	levels!(dat1.CTR, ["val", "sod", "dos", "dod"])
 	describe(dat1)
 end
 
+# ╔═╡ 7795367d-5286-4311-baf5-9f69190f9cfa
+dat_subj = combine(groupby(dat1, [:Subj, :CTR]),
+	:rt => length => :n, 
+    :rt => mean => :rt_m,
+    :rt  => std => :rt_sd
+)
+
 # ╔═╡ 90b45536-4397-418a-8bea-887a6d5bdff9
-begin
-	# Descriptive statistics
-	## Subject level
-	dat_subj = combine(groupby(dat1, [:Subj, :CTR]), 
-					   :rt => length => :n, 
-		               :rt => mean => :rt_m,
-		               :rt  => std => :rt_sd);
-	## Condition level
-	dat_cond = combine(groupby(dat_subj, [:CTR]), 
-					   :n => length => :N, 
-		               :rt_m => mean => :rt_M, 
-		               :rt_m  => std => :rt_SD, 
-                       :rt_m => (x -> std(x)/sqrt(length(x))) => :rt_SE)
-end
+dat_cond = combine(groupby(dat_subj, [:CTR]),
+	:n => length => :N,
+    :rt_m => mean => :rt_M, 
+    :rt_m  => std => :rt_SD, 
+    :rt_m => (x -> std(x)/sqrt(length(x))) => :rt_SE,
+)
+
+# ╔═╡ 74d331c7-8574-4164-9ba6-1652c717d5e3
+md"""
+Comparative density plots of all response times by cue-target relation show the times for valid cues to be faster than for the other conditions.
+"""
 
 # ╔═╡ dd297971-1728-48d8-b73e-94d87555355e
-begin
-	geom = visual(BoxPlot, layout_x = 1) + visual(Violin, layout_x = 2)
-	data(dat_subj) * mapping( 
-		:CTR => renamer("val" => "valid cue", 
-		     		    "sod" => "some obj/diff pos", 
-		                "dos" =>  "diff obj/same pos", 
-		                "dod" => "diff obj/diff pos") => "Cue-target relation",     
-		:rt_m => "Reaction time (ms)") * visual(BoxPlot) |> draw
-end
+data(dat1) * 
+mapping(
+	:rt => "Reaction time (ms)",	
+	color=:CTR => renamer(
+		"val" => "valid cue",   
+		"sod" => "some obj/diff pos",
+		"dos" =>  "diff obj/same pos", 
+		"dod" => "diff obj/diff pos"
+	) => "Cue-target relation",     
+) * density() |> draw
+
+# ╔═╡ cb0cfcf0-b3aa-48d2-b12c-f98cfd923aad
+md"""
+Boxplots of the mean response time by subject under the different conditions show an outlier under each of the conditions.
+"""
+
+# ╔═╡ ed4a011b-1773-4085-870e-5161ef3e501a
+boxplot(
+	dat_subj.CTR.refs,
+	dat_subj.rt_m;
+	orientation=:horizontal,
+	show_notch=true,
+	axis=(; yticks=(
+			1:4,
+			[
+				"valid cue",
+				"same obj/diff pos",
+				"diff obj/same pos",
+				"diff obj/diff pos"
+			]
+		)
+	),
+	figure=(;resolution=(800, 300)),
+)
+
+# ╔═╡ ef659cc3-c948-49aa-9832-a8f69fd5cf5a
+md"""
+ _Figure 1._ Mean reaction times by subject for four cue-target relations. Target appeared at (a) the cued position (valid), (b) on the same rectangle, but its other end, (c) on the other rectangle, but at corresponding horizontal/vertical physical distance, or (d) at the other end of the other rectangle, that is $\sqrt{2}$ of horizontal/vertical distance diagonally across from the cue.
+
+It turns out that the outliers are all from the same subject.
+"""
+
+# ╔═╡ bf96e629-5bf3-4292-9572-0f47dff48608
+@subset(dat_subj, :rt_m > 510)
 
 # ╔═╡ c9f1e8a1-217f-4ff5-ad78-a2a8047db41a
-md""" _Figure 1._ Mean reaction times for four cue-target relations. Target appeared at (a) the cued position (valid), (b) on the same, but its other end, (c) on the other rectangle, but at corresponding horizontal/vertical physical distance, or (d) at the other end of the other rectangle, that is $\sqrt{2}$ of horizontal/vertical distance diagonally across from the cue.
-
-There appears to be an outlier that should perhaps be removewd. As indicated by the error bars, the usual skew of reactions times is present in these data. An analysis based on log-transformed reaction times (also indicated by a _boxcox()_ check of residuals) did not lead to different results in the first study (see [Kliegl et al., 2011; Frontiers](https://doi.org/10.3389/fpsyg.2010.00238)). Therefore, for this tutorial we stick with the reaction times in original time metric. 
+md"""
+The outlier should perhaps be removed. As indicated by the error bars, the usual skew of reactions times is present in these data. An analysis based on log-transformed reaction times (also indicated by a _boxcox()_ check of residuals) did not lead to different results in the first study (see [Kliegl et al., 2011; Frontiers](https://doi.org/10.3389/fpsyg.2010.00238)). Therefore, for this tutorial we stick with the reaction times in original time metric. 
 
 **To be done: This analysis should not be considered final. We should check model residuals and consider a log-transformation. There are also other conditions in the experiment that should be modeled. They are small or large targets (varied between subjects) and four orientations (vertical/horizontal, diagonal left/right) of rectangles used for cueing (varied within subjects). The effects were modelled and reported in [Bates et al. (2015)](https://arxiv.org/abs/1506.04967).**
 """
@@ -170,13 +209,8 @@ md""" ### Comparative density plots of bootstrapped parameter estimates
 """
 
 # ╔═╡ 06a66a4e-792f-4302-8530-75905c4d3922
-begin
-	let
-	labels = ["missing" => "residual"]
-	data(@subset(dat2, :type == "σ" && :group == "residual")) * 
-	mapping(:value => "Residual") * density() |> draw
-	end
-end
+data(@subset(dat2, :type == "σ" && :group == "residual")) * 
+mapping(:value => "Residual") * density() |> draw
 
 # ╔═╡ aa2531f8-3016-4f53-b4f5-68bfb293a192
 md""" #### Fixed effects (w/o GM)
@@ -1581,8 +1615,14 @@ version = "3.5.0+0"
 # ╠═c8032155-0298-438c-8d2e-e711ce8a3055
 # ╟─539399d9-1b68-4d90-8e63-ff5f2674c494
 # ╠═47e078b0-41ab-4186-8680-aff3a79ea3c7
+# ╠═7795367d-5286-4311-baf5-9f69190f9cfa
 # ╠═90b45536-4397-418a-8bea-887a6d5bdff9
-# ╠═dd297971-1728-48d8-b73e-94d87555355e
+# ╟─74d331c7-8574-4164-9ba6-1652c717d5e3
+# ╟─dd297971-1728-48d8-b73e-94d87555355e
+# ╟─cb0cfcf0-b3aa-48d2-b12c-f98cfd923aad
+# ╟─ed4a011b-1773-4085-870e-5161ef3e501a
+# ╟─ef659cc3-c948-49aa-9832-a8f69fd5cf5a
+# ╠═bf96e629-5bf3-4292-9572-0f47dff48608
 # ╟─c9f1e8a1-217f-4ff5-ad78-a2a8047db41a
 # ╟─317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 # ╠═e87aa1f2-3578-47d1-bc66-3055b395cfe7
