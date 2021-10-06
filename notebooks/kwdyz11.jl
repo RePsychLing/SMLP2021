@@ -173,6 +173,16 @@ The slant in residuals show a lower and upper boundary of reaction times, that i
 # ╔═╡ 6469a4d3-8390-42c9-8f7f-df40a4609a6f
 scatter(fitted(m1), residuals(m1))
 
+# ╔═╡ b1bfc45b-e8ce-4234-8410-bf5642fb627a
+md" With many observations the scatterplot is not that informative. Contour plots or heatmaps may be an alternative. "
+
+# ╔═╡ 22ec1ebc-0ff9-491f-87b8-aa0490e0d0f5
+begin
+	set_aog_theme!()
+	df_rof = DataFrame(fitted = fitted(m1), resid=residuals(m1))
+	data(df_rof) * mapping(:fitted, :resid) * density() |> draw
+end
+
 # ╔═╡ f6b12c9b-d6d3-4860-b86c-16d1a5a99b3a
 md""" ### Q-Q plot
 
@@ -1709,6 +1719,8 @@ version = "3.5.0+0"
 # ╠═2f2e6cc2-a8a0-4278-9d62-d6d755ac0a8b
 # ╟─90828890-5f27-4ce7-b1c2-05d0c56b7156
 # ╠═6469a4d3-8390-42c9-8f7f-df40a4609a6f
+# ╠═b1bfc45b-e8ce-4234-8410-bf5642fb627a
+# ╠═22ec1ebc-0ff9-491f-87b8-aa0490e0d0f5
 # ╟─f6b12c9b-d6d3-4860-b86c-16d1a5a99b3a
 # ╠═6f64664f-8492-4ad8-88e0-d3cc8ff3ec72
 # ╟─41f729d2-54e7-49df-9348-bbf0c1bdf5db
