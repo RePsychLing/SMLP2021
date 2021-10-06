@@ -16,9 +16,8 @@ begin
 	using MixedModels
 	using MixedModelsMakie
 	using Random
-	using Statistics
 	using StatsBase
-	using StatsPlots
+	using Statistics
 	using AlgebraOfGraphics: density
 	using AlgebraOfGraphics: boxplot
 	const rng = MersenneTwister(1234321)
@@ -26,6 +25,9 @@ begin
 	Base.show(io::IO, ::MIME"text/html", 
 		       x::CategoricalArrays.CategoricalValue) = print(io, get(x)) 
 end
+
+# ╔═╡ f3ca58ea-43b3-4da6-a91e-82c94ceb68e8
+using Query, StatsPlots
 
 # ╔═╡ e53c82d6-6deb-4a2c-a127-9cd6805cc74b
 md"""
@@ -83,19 +85,8 @@ mapping(
 	) => "Cue-target relation",     
 ) * density() |> draw
 
-# ╔═╡ 857a672f-9d1e-46da-aa90-5a0a48fdbf2e
-md" An alternative visualization without overlap of the conditions can be accomplished with ridge plots."
-
-# ╔═╡ 9191733b-0a81-4c82-8b64-4be285970e9e
-md" **To be done** "
-
 # ╔═╡ d10eeea1-12aa-4f22-b0fc-89c47016a09d
 md" For the next set of plots we average the 86 subjects' data within the four experimental conditions. This table could be used as input for a repeated-measures ANOVA."
-
-# ╔═╡ 56e0c598-680d-420b-9dbf-7362cba4d20e
-md" For the next set of plots we average subjects' data within the four experimental conditions. This table could be used as input for a repeated-measures ANOVA.
-
-Boxplots of the mean of log response time by subject under the different conditions show an outlier value under three of the four conditions; they are from the same subject."
 
 # ╔═╡ 7795367d-5286-4311-baf5-9f69190f9cfa
 dat_subj = combine(groupby(dat, [:Subj, :CTR]),
@@ -111,6 +102,17 @@ dat_cond = combine(groupby(dat_subj, [:CTR]),
     :lrt_m  => std => :lrt_SD, 
     :lrt_m => (x -> std(x)/sqrt(length(x))) => :lrt_SE,
 )
+
+# ╔═╡ 857a672f-9d1e-46da-aa90-5a0a48fdbf2e
+md" An alternative visualization without overlap of the conditions can be accomplished with ridge plots."
+
+# ╔═╡ 9191733b-0a81-4c82-8b64-4be285970e9e
+md" **To be done** "
+
+# ╔═╡ 56e0c598-680d-420b-9dbf-7362cba4d20e
+md" For the next set of plots we average subjects' data within the four experimental conditions. This table could be used as input for a repeated-measures ANOVA.
+
+Boxplots of the mean of log response time by subject under the different conditions show an outlier value under three of the four conditions; they are from the same subject."
 
 # ╔═╡ ed4a011b-1773-4085-870e-5161ef3e501a
 boxplot(
@@ -166,41 +168,6 @@ md" A better alternative to the boxplot is often a dotplot, because it also disp
 # ╔═╡ 9f41d2bf-4c14-46db-9b65-f685afb19d2c
 md" **To be done** "
 
-# ╔═╡ 6fa62496-2432-4423-9e55-fd37b3f4f849
-md"""
-We can also look at correlations plots based on the four condition means. There are actually two correlation matrices which have correspondences in alternative parameterizatios of the LMM random-effec structure. One matrix is based on the four measures. If you think of the four measures as test scores, this matrix is the usual correlation matrix. The second matrix contains correlations between the Grand Mean (GM) and the three effects defined with the contrasts for the four levels of the condition factor in the next chunk. 
-
-To this end, we
-
-+ use the `unstack()` command to convert data from long to wide format,
-+ compute the GM and the three experimental effects.
-+ plot the correlation matrix for four measures/scores, and
-+ plot the correlation matrix for GM and three effects
-
-"""
-
-# ╔═╡ f50e0fff-665b-4056-993c-b6dac881785b
-begin
-	dat_subj_w = unstack(dat_subj, :Subj, :CTR, :rt_m)
-	@transform!(dat_subj_w,  :GM = (:val + :sod + :dos + :dod) ./4)
-    @transform!(dat_subj_w,  :spatial =    :sod - :val)
-	@transform!(dat_subj_w,  :object =     :dos - :sod)
-	@transform!(dat_subj_w,  :attraction = :dod - :dos)
-	describe(dat_subj_w)
-end
-
-# ╔═╡ a5226169-dd2e-4105-9569-98fd781332a4
-@df dat_subj_w StatsPlots.corrplot(cols(2:5), grid = false, compact=false)
-
-# ╔═╡ 1e740cc3-3037-4fa3-82d2-75b13b86a593
-@df dat_subj_w StatsPlots.corrplot(cols(6:9), grid = false, compact=false)
-
-# ╔═╡ 7343b5fc-3664-4f13-8a95-8795a1b0c959
-
-
-# ╔═╡ 019a4876-e32d-41f4-9636-7efaea5e4929
-md"**Note:** Two of the theoreticsally irrelevant within-subject effect correlations have a different sign than the corresponding, non-significant CPs in the LMM; they are negative here, numerically positive in the LMM. This occurs only very rarely in the case of ecological correlations. However, as they are not significant according to shortest coverage interval, it may not be that relevant either. It is the case both for effects based on log-transformed and raw reaction times."
-
 # ╔═╡ 317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 md"""## Linear mixed model
 """
@@ -210,10 +177,8 @@ begin
 	cntr1 = Dict(
     :CTR  => SeqDiffCoding(levels=["val", "sod", "dos", "dod"]),
  	);
-end
 
-# ╔═╡ bd24f002-3f17-4cea-b371-5a972956da11
-begin	
+
 	formula = @formula  lrt ~ 1 + CTR + (1 + CTR | Subj);
 	m1 = fit(MixedModel, formula, dat, contrasts=cntr1)
 end
@@ -221,27 +186,8 @@ end
 # ╔═╡ 21ab3d31-c385-4520-a8c7-927d8d63f074
 VarCorr(m1)
 
-# ╔═╡ 51cab366-6b2d-4b27-a248-947a0e8032cb
-issingular(m1)
-
 # ╔═╡ 60a3548e-796c-4bdf-95c7-6fefbbb35cb9
 MixedModels.PCA(m1)
-
-# ╔═╡ 960f1f33-d24d-4aa8-a806-e948aeaa711d
-md" We note that the critical correlation parameter between spatial (`sod`) and attraction (`dod`) is now estimated at .66 -- not that close to the 1.0 boundary that caused singularity in Kliegl et al. (2011; `kydwz11.jl`). However, the LMM based on log reaction times is still singular. Let's check for untransformed reaction times."  
-
-# ╔═╡ dbc8c8fb-2ca0-4424-9dfa-458b21c96130
-begin	
-	formula_rt = @formula  rt ~ 1 + CTR + (1 + CTR | Subj);
-	m1_rt = fit(MixedModel, formula_rt, dat, contrasts=cntr1)
-	VarCorr(m1_rt)
-end
-
-# ╔═╡ d46d1bc3-baf5-4e93-8f4f-e3d400e5b0dd
-issingular(m1_rt)
-
-# ╔═╡ 37a7fbf7-68e7-419f-80fc-7c0ad0d30fa3
-md"For untransformed reaction times, we the model is **not** singular."
 
 # ╔═╡ 0ffa0a85-f197-47ce-8e22-4a7667ffd404
 md""" ## Diagnostic plots of LMM residuals
@@ -257,7 +203,7 @@ The slant in residuals show a lower and upper boundary of reaction times, that i
 """
 
 # ╔═╡ e215a6c6-3499-4bd4-bdc5-c153ade0122a
-StatsPlots.scatter(fitted(m1), residuals(m1))
+scatter(fitted(m1), residuals(m1))
 
 # ╔═╡ 2a00f1e4-f7a0-4b4f-941e-739c0af69a15
 md" With many observations the scatterplot is not that informative. Contour plots or heatmaps may be an alternative. "
@@ -276,10 +222,7 @@ The plot of quantiles of model residuals over corresponding quantiles of the nor
 """
 
 # ╔═╡ b0707eaa-ddea-4c9f-a944-4341a664e8bc
-StatsPlots.qqnorm(residuals(m1), qqline = :R)
-
-# ╔═╡ dccc2e5b-76f1-4a0a-a622-3f76faf705b5
-StatsPlots.qqnorm(residuals(m1_rt), qqline = :R)
+qqnorm(residuals(m1), qqline = :R) 
 
 # ╔═╡ 78828df6-37c6-4078-b238-ff99f01f4524
 md""" ### Observed and theoretical normal distribution
@@ -306,35 +249,14 @@ begin
 	caterpillar!(Figure(; resolution=(800,1000)), cm1; orderby=2)
 end
 
-# ╔═╡ f165a8e8-ec47-4262-956f-ab72d016afc1
-md" When we order the conditional modes for GM, that is `(Intercept)`, the outlier subject _S113_ becomes visible; the associated experimental effects are not unusual."
-
-# ╔═╡ 186c1a60-61d2-472c-8bdb-0a74728ea478
-caterpillar!(Figure(; resolution=(800,1000)), cm1; orderby=1)
-
 # ╔═╡ 2586e36d-36f7-480f-8848-5a4ace1f0b80
 md"""### Shrinkage plot
-
-#### Log-transformed reaction times (LMM `m1`)
 """
 
 # ╔═╡ 06ba4e03-ecf1-492c-9c47-1dfa1ce2550a
 shrinkageplot!(Figure(; resolution=(1000,1000)), m1)
 
-# ╔═╡ aa38afc2-3eed-45f1-84d5-533861bd59ed
-md"
-Three of the CPs are imploded, but not the theoretically critical ones. These implosions did not occur (or were not as visible) for raw reaction times."
-
-# ╔═╡ abda9d25-9308-4bf7-83cc-b5ad8ab30d19
-md" #### Raw reaction times (LMM `m1_rt`)"
-
-# ╔═╡ 1ce5ba11-d404-4611-ad2a-fa10796e7315
-shrinkageplot!(Figure(; resolution=(1000,1000)), m1_rt)
-
-# ╔═╡ e9b57232-8a63-45f9-938b-6c2e868d8a2e
-md"The implosion is for three CP visualizations is not observed for raw reaction times. Interesting."
-
-# ╔═╡ 19d5fc45-5547-4cef-abb9-19e6636aa162
+# ╔═╡ f60ef911-7bd9-4a37-8970-6111df579235
 md""" ## Parametric bootstrap
 
 Here we 
@@ -348,9 +270,9 @@ Here we
 We generate 10,000 samples for the 15 model parameters (4 fixed effect, 4 VCs, 6 CPs, and 1 residual).
 """ 
 
-# ╔═╡ f840717c-8bd2-4358-a85f-df4b6eb0d8a8
+# ╔═╡ 19d5fc45-5547-4cef-abb9-19e6636aa162
 begin
-	samp = parametricbootstrap(rng, 10_000, m1) # use m1_rt for raw reaction times
+	samp = parametricbootstrap(rng, 10_000, m1)
 	dat2 = DataFrame(samp.allpars)
 	first(dat2, 10)
 end
@@ -441,8 +363,32 @@ end
 # ╔═╡ e449e136-62ec-4e85-8470-3fdb2d804ce7
 md"""Three CPs stand out positively, the correlation between GM and the spatial effect, GM and attraction effect, and the correlation between spatial and attraction effects. The second CP was positive, but not significant in the first study. The third CP replicates a CP that was judged questionable in script `kwdyz11.jl`. 
 
-The three remaining CPs are not well defined for log-transformed reaction times; they only fit noise and should be removed. It is also possible that fitting the complex experimental design (including target size and rectangle orientation) will lead to more acceptable estimates. The corresponding plot based on LMM `m1_rt` for raw reaction times still shows them with very wide distributions, but acceptable.
 """
+
+# ╔═╡ ead14c66-0795-4a5d-a265-56680b6c1385
+md""" ## Diagnostic plots of LMM residuals
+
+Do model residuals meet LMM assumptions? Classic plots are 
+
++ Residual over fitted
++ Quantiles of model residuals over theoretical quantiles of normal distribution
+
+"""
+
+# ╔═╡ 664b7e61-62aa-43ff-8f90-64e13464aa36
+scatter(fitted(m1), residuals(m1))
+
+# ╔═╡ 9ce1ea54-38f5-4d39-8eb9-e37830ce5c7a
+@df dat_subj StatsPlots.density(:rt_m, group = :CTR, legend = :topleft)
+
+# ╔═╡ fbe3d7ef-c4b2-4fbd-b510-0c83c9323c78
+dat_subj_w = unstack(dat_subj, :Subj, :CTR, :rt_m)
+
+# ╔═╡ 160aa9c0-ecc1-44b5-b1f2-fb6bef982b6c
+@df dat_subj_w StatsPlots.corrplot(cols(2:5), grid = false, compact=false)
+
+# ╔═╡ 1383a426-a7cc-46bc-be98-28750b8458f2
+StatsPlots.qqnorm(residuals(m1), qqline = :R)
 
 # ╔═╡ aefcc7ad-58af-42ea-b0d7-d8e96b12104b
 md" **That's it for now. Have fun!** "
@@ -459,6 +405,7 @@ DataFrameMacros = "75880514-38bc-4a95-a458-c2aea5a3a702"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 MixedModels = "ff71e718-51f3-5ec2-a782-8ffcbfa3c316"
 MixedModelsMakie = "b12ae82c-6730-437f-aff9-d2c38332a376"
+Query = "1a8c2f83-1ff3-5112-b086-8aa67b057ba1"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
@@ -474,6 +421,7 @@ DataFrameMacros = "~0.1.1"
 DataFrames = "~1.2.2"
 MixedModels = "~4.4.0"
 MixedModelsMakie = "~0.3.10"
+Query = "~1.0.0"
 StatsBase = "~0.33.10"
 StatsPlots = "~0.14.28"
 """
@@ -648,10 +596,10 @@ uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
 version = "0.7.0"
 
 [[deps.CodecZstd]]
-deps = ["CEnum", "TranscodingStreams", "Zstd_jll"]
-git-tree-sha1 = "7cdff4168b9db17a4b97a2b7104979fabc00d57b"
+deps = ["TranscodingStreams", "Zstd_jll"]
+git-tree-sha1 = "d19cd9ae79ef31774151637492291d75194fc5fa"
 uuid = "6b39b394-51ab-5f42-8807-6242bab2b4c2"
-version = "0.7.1"
+version = "0.7.0"
 
 [[deps.ColorBrewer]]
 deps = ["Colors", "JSON", "Test"]
@@ -1041,6 +989,12 @@ version = "0.1.1"
 git-tree-sha1 = "05110a2ab1fc5f932622ffea2a003221f4782c18"
 uuid = "c8e1da08-722c-5040-9ed9-7db0dc04731e"
 version = "1.3.0"
+
+[[deps.IterableTables]]
+deps = ["DataValues", "IteratorInterfaceExtensions", "Requires", "TableTraits", "TableTraitsUtils"]
+git-tree-sha1 = "70300b876b2cebde43ebc0df42bc8c94a144e1b4"
+uuid = "1c8ee90f-4401-5389-894e-7a04a3dc0f4d"
+version = "1.0.0"
 
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
@@ -1473,9 +1427,9 @@ version = "2.0.1"
 
 [[deps.PlotUtils]]
 deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "Statistics"]
-git-tree-sha1 = "b084324b4af5a438cd63619fd006614b3b20b87b"
+git-tree-sha1 = "2537ed3c0ed5e03896927187f5f2ee6a4ab342db"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
-version = "1.0.15"
+version = "1.0.14"
 
 [[deps.Plots]]
 deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "GeometryBasics", "JSON", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "PlotThemes", "PlotUtils", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs"]
@@ -1532,6 +1486,18 @@ git-tree-sha1 = "78aadffb3efd2155af139781b8a8df1ef279ea39"
 uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 version = "2.4.2"
 
+[[deps.Query]]
+deps = ["DataValues", "IterableTables", "MacroTools", "QueryOperators", "Statistics"]
+git-tree-sha1 = "a66aa7ca6f5c29f0e303ccef5c8bd55067df9bbe"
+uuid = "1a8c2f83-1ff3-5112-b086-8aa67b057ba1"
+version = "1.0.0"
+
+[[deps.QueryOperators]]
+deps = ["DataStructures", "DataValues", "IteratorInterfaceExtensions", "TableShowUtils"]
+git-tree-sha1 = "911c64c204e7ecabfd1872eb93c49b4e7c701f02"
+uuid = "2aef5ad7-51ca-5a8f-8e88-e75cf067b44b"
+version = "0.9.3"
+
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
@@ -1564,9 +1530,9 @@ version = "1.2.2"
 
 [[deps.RelocatableFolders]]
 deps = ["SHA", "Scratch"]
-git-tree-sha1 = "df2be5142a2a3db2da37b21d87c9fa7973486bfd"
+git-tree-sha1 = "9a4b7698b59b24003e8475df70c1b83b958b1f62"
 uuid = "05181044-ff0b-4ac5-8273-598c1e38db00"
-version = "0.1.2"
+version = "0.1.1"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
@@ -1732,11 +1698,23 @@ git-tree-sha1 = "019acfd5a4a6c5f0f38de69f2ff7ed527f1881da"
 uuid = "ab02a1b2-a7df-11e8-156e-fb1833f50b87"
 version = "1.1.0"
 
+[[deps.TableShowUtils]]
+deps = ["DataValues", "Dates", "JSON", "Markdown", "Test"]
+git-tree-sha1 = "14c54e1e96431fb87f0d2f5983f090f1b9d06457"
+uuid = "5e66a065-1f0a-5976-b372-e0b8c017ca10"
+version = "0.2.5"
+
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
 git-tree-sha1 = "c06b2f539df1c6efa794486abfb6ed2022561a39"
 uuid = "3783bdb8-4a98-5b6b-af9a-565f29a5fe9c"
 version = "1.0.1"
+
+[[deps.TableTraitsUtils]]
+deps = ["DataValues", "IteratorInterfaceExtensions", "Missings", "TableTraits"]
+git-tree-sha1 = "78fecfe140d7abb480b53a44f3f85b6aa373c293"
+uuid = "382cd787-c1b6-5bf2-a167-d5b971a19bda"
+version = "1.0.2"
 
 [[deps.Tables]]
 deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "TableTraits", "Test"]
@@ -2035,55 +2013,36 @@ version = "0.9.1+5"
 # ╟─120fa224-f345-4c08-a6fa-f54e5efe7a39
 # ╟─74d331c7-8574-4164-9ba6-1652c717d5e3
 # ╠═dd297971-1728-48d8-b73e-94d87555355e
+# ╟─d10eeea1-12aa-4f22-b0fc-89c47016a09d
+# ╠═7795367d-5286-4311-baf5-9f69190f9cfa
+# ╠═90b45536-4397-418a-8bea-887a6d5bdff9
 # ╟─857a672f-9d1e-46da-aa90-5a0a48fdbf2e
 # ╟─9191733b-0a81-4c82-8b64-4be285970e9e
-# ╟─d10eeea1-12aa-4f22-b0fc-89c47016a09d
-# ╠═90b45536-4397-418a-8bea-887a6d5bdff9
 # ╟─56e0c598-680d-420b-9dbf-7362cba4d20e
-# ╠═7795367d-5286-4311-baf5-9f69190f9cfa
 # ╟─ed4a011b-1773-4085-870e-5161ef3e501a
 # ╟─ef659cc3-c948-49aa-9832-a8f69fd5cf5a
 # ╠═bf96e629-5bf3-4292-9572-0f47dff48608
 # ╟─3fb2caa9-6873-42c9-8419-421d0cec2d16
 # ╟─4001cfa9-0fbe-40e3-b324-e0c1c26c6b8c
 # ╟─9f41d2bf-4c14-46db-9b65-f685afb19d2c
-# ╟─6fa62496-2432-4423-9e55-fd37b3f4f849
-# ╠═f50e0fff-665b-4056-993c-b6dac881785b
-# ╠═a5226169-dd2e-4105-9569-98fd781332a4
-# ╠═1e740cc3-3037-4fa3-82d2-75b13b86a593
-# ╠═7343b5fc-3664-4f13-8a95-8795a1b0c959
-# ╟─019a4876-e32d-41f4-9636-7efaea5e4929
 # ╟─317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 # ╠═e827e62a-b458-46a7-a86c-b3c3392c3e6a
-# ╠═bd24f002-3f17-4cea-b371-5a972956da11
 # ╠═21ab3d31-c385-4520-a8c7-927d8d63f074
-# ╠═51cab366-6b2d-4b27-a248-947a0e8032cb
 # ╠═60a3548e-796c-4bdf-95c7-6fefbbb35cb9
-# ╟─960f1f33-d24d-4aa8-a806-e948aeaa711d
-# ╠═dbc8c8fb-2ca0-4424-9dfa-458b21c96130
-# ╠═d46d1bc3-baf5-4e93-8f4f-e3d400e5b0dd
-# ╟─37a7fbf7-68e7-419f-80fc-7c0ad0d30fa3
-# ╟─0ffa0a85-f197-47ce-8e22-4a7667ffd404
+# ╠═0ffa0a85-f197-47ce-8e22-4a7667ffd404
 # ╠═e215a6c6-3499-4bd4-bdc5-c153ade0122a
-# ╟─2a00f1e4-f7a0-4b4f-941e-739c0af69a15
+# ╠═2a00f1e4-f7a0-4b4f-941e-739c0af69a15
 # ╠═2d5e62f0-170b-49a6-b9fd-cfb3ee06c59b
-# ╟─89ffc792-7637-4e38-b80b-1b1406222fcd
+# ╠═89ffc792-7637-4e38-b80b-1b1406222fcd
 # ╠═b0707eaa-ddea-4c9f-a944-4341a664e8bc
-# ╠═dccc2e5b-76f1-4a0a-a622-3f76faf705b5
-# ╟─78828df6-37c6-4078-b238-ff99f01f4524
+# ╠═78828df6-37c6-4078-b238-ff99f01f4524
 # ╠═1ea84110-ea5f-4eb1-9b56-54a35bff5099
 # ╟─12e3d62f-0330-440d-9971-19d11c1993e0
 # ╠═edbf6df5-bca3-4b5f-8c4c-a7c346899319
-# ╟─f165a8e8-ec47-4262-956f-ab72d016afc1
-# ╠═186c1a60-61d2-472c-8bdb-0a74728ea478
 # ╟─2586e36d-36f7-480f-8848-5a4ace1f0b80
 # ╠═06ba4e03-ecf1-492c-9c47-1dfa1ce2550a
-# ╟─aa38afc2-3eed-45f1-84d5-533861bd59ed
-# ╟─abda9d25-9308-4bf7-83cc-b5ad8ab30d19
-# ╠═1ce5ba11-d404-4611-ad2a-fa10796e7315
-# ╟─e9b57232-8a63-45f9-938b-6c2e868d8a2e
-# ╟─19d5fc45-5547-4cef-abb9-19e6636aa162
-# ╠═f840717c-8bd2-4358-a85f-df4b6eb0d8a8
+# ╟─f60ef911-7bd9-4a37-8970-6111df579235
+# ╠═19d5fc45-5547-4cef-abb9-19e6636aa162
 # ╠═63dc9d34-8c7c-4dd8-af62-8717e9e73946
 # ╟─d600ea54-8848-4c2b-a364-b8dcc42a5491
 # ╠═8b158499-04f6-43a2-be6c-7ca5e28e0ce7
@@ -2092,11 +2051,18 @@ version = "0.9.1+5"
 # ╟─aa2531f8-3016-4f53-b4f5-68bfb293a192
 # ╠═ce5cfe1a-7c90-41be-a489-fba2e25d4b3c
 # ╟─5cf09fc4-7857-4a85-ada3-4980f3d1a571
-# ╟─8ff68199-69ae-4290-872c-f64e8ccc0a24
+# ╠═8ff68199-69ae-4290-872c-f64e8ccc0a24
 # ╟─20449205-de59-4f4f-b591-b6b7107772e9
 # ╠═7e674218-3bf2-426e-b10b-579719d60a24
-# ╟─c0cc261d-3b48-4fc5-965f-c8b57dc7783c
-# ╟─e449e136-62ec-4e85-8470-3fdb2d804ce7
+# ╠═c0cc261d-3b48-4fc5-965f-c8b57dc7783c
+# ╠═e449e136-62ec-4e85-8470-3fdb2d804ce7
+# ╠═ead14c66-0795-4a5d-a265-56680b6c1385
+# ╠═664b7e61-62aa-43ff-8f90-64e13464aa36
+# ╠═f3ca58ea-43b3-4da6-a91e-82c94ceb68e8
+# ╠═9ce1ea54-38f5-4d39-8eb9-e37830ce5c7a
+# ╠═fbe3d7ef-c4b2-4fbd-b510-0c83c9323c78
+# ╠═160aa9c0-ecc1-44b5-b1f2-fb6bef982b6c
+# ╠═1383a426-a7cc-46bc-be98-28750b8458f2
 # ╟─aefcc7ad-58af-42ea-b0d7-d8e96b12104b
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
