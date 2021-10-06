@@ -16,8 +16,8 @@ begin
 	using MixedModels
 	using MixedModelsMakie
 	using Random
-	using Statistics
 	using StatsBase
+	using Statistics
 	using AlgebraOfGraphics: density
 	using AlgebraOfGraphics: boxplot
 	const rng = MersenneTwister(1234321)
@@ -39,7 +39,7 @@ We specify three contrasts for the four-level factor CTR that are derived from s
 
 Unfortunately, a few years after the publication, we determined that the reported LMM is actually singular and that the singularity is linked to a theoretically critical correlation parameter (CP) between the spatial effect and the attraction effect.  Fortunately, there is also a larger dataset `kkl15.arrow` from a replication and extension of this study (Kliegl, Kuschela, & Laubrock, 2015), analyzed with `kkl15.jl` notebook. The critical CP (along with other fixed effects and CPs) was replicated in this study. 
 
-Those analyses were originally reported in the parsimonious mixed-model paper [(Bates et al., 2015)](https://arxiv.org/abs/1506.04967). Data and R scripts are also available in [R-package RePsychLing](https://github.com/dmbates/RePsychLing/tree/master/data/) (Baayen et al., 2014). In this and the complementary `kkl15.jl` scripts, we provide the corresponding analyses with _MixedModels.jl_.
+A more comprehensive analysis was reported in the parsimonious mixed-model paper [(Bates et al., 2015)](https://arxiv.org/abs/1506.04967). Data and R scripts are also available in [R-package RePsychLing](https://github.com/dmbates/RePsychLing/tree/master/data/). In this and the complementary `kkl15.jl` scripts, we provide some corresponding analyses with _MixedModels.jl_.
 
 ## Packages
 """
@@ -120,7 +120,7 @@ begin
 end
 
 # ╔═╡ 6a4b43f5-b210-4f5a-98df-4bc801a0bca3
-md""" _Figure 1._ Mean of log reaction times for four cue-target relations. Targets appeared at (a) the cued position (valid) in a rectangle, (b) in the same rectangle cue, but at its other end, (c) on the second rectangle, but at a corresponding horizontal/vertical physical distance, or (d) at the other end of the second rectangle, that is $\sqrt{2}$ of horizontal/vertical distance diagonally across from the cue, that is also at larger physical distance compared to (c).
+md""" Mean of log reaction times for four cue-target relations. Targets appeared at (a) the cued position (valid) in a rectangle, (b) in the same rectangle cue, but at its other end, (c) on the second rectangle, but at a corresponding horizontal/vertical physical distance, or (d) at the other end of the second rectangle, that is $\sqrt{2}$ of horizontal/vertical distance diagonally across from the cue, that is also at larger physical distance compared to (c).
 """
 
 # ╔═╡ e5d289fb-7134-4444-ad5a-ec1e4e1ecec5
