@@ -19,6 +19,7 @@ begin
 	using Statistics
 	using StatsBase
 	using AlgebraOfGraphics: density
+	using AlgebraOfGraphics: boxplot
 	const rng = MersenneTwister(1234321)
 	CairoMakie.activate!(type="svg") # use SVG (other options include PNG)
 	Base.show(io::IO, ::MIME"text/html", 
@@ -38,55 +39,95 @@ We specify three contrasts for the four-level factor CTR that are derived from s
 
 Unfortunately, a few years after the publication, we determined that the reported LMM is actually singular and that the singularity is linked to a theoretically critical correlation parameter (CP) between the spatial effect and the attraction effect.  Fortunately, there is also a larger dataset `kkl15.arrow` from a replication and extension of this study (Kliegl, Kuschela, & Laubrock, 2015), analyzed with `kkl15.jl` notebook. The critical CP (along with other fixed effects and CPs) was replicated in this study. 
 
-Those analyses were originally reported in the parsimonious mixed-model paper [(Bates et al., 2015)](https://arxiv.org/abs/1506.04967). Data and R scripts are also available in [R-package RePsychLing](https://github.com/dmbates/RePsychLing/tree/master/data/) (Baayen et al., 2014). In this script and in `kkl15.jl` we provide the corresponding analyses with _MixedModels.jl_.
+Those analyses were originally reported in the parsimonious mixed-model paper [(Bates et al., 2015)](https://arxiv.org/abs/1506.04967). Data and R scripts are also available in [R-package RePsychLing](https://github.com/dmbates/RePsychLing/tree/master/data/) (Baayen et al., 2014). In this and the complementary `kkl15.jl` scripts, we provide the corresponding analyses with _MixedModels.jl_.
 
 ## Packages
 """
 
 # ╔═╡ 539399d9-1b68-4d90-8e63-ff5f2674c494
-md" ## Read data, compute and plot means"
+md" ## Read data, compute and plot densities and means"
 
 # ╔═╡ 47e078b0-41ab-4186-8680-aff3a79ea3c7
 begin
-	dat1 = DataFrame(Arrow.Table("./data/kwdyz11.arrow"))
-	dat1 = select(dat1, :subj => :Subj, :tar => :CTR, :rt)
-	dat1.CTR = categorical(dat1.CTR)
-	levels!(dat1.CTR, ["val", "sod", "dos", "dod"])
-	describe(dat1)
+	dat = select(DataFrame(Arrow.Table("./data/kwdyz11.arrow")),
+		:subj => (s -> categorical(string.('S', lpad.(s, 2, '0')))) => :Subj,
+		:tar => categorical => :CTR,
+		:rt)
+	levels!(dat.CTR, ["val", "sod", "dos", "dod"])
+	@transform!(dat,  :lrt = log(:rt))
+	describe(dat)
 end
 
+# ╔═╡ f97a8097-af57-45ec-8a5b-45d02a5c46cf
+md""" We recommend to code the levels/units of random factor / grouping variable not as a number, but as a string starting with a letter and of the same length for all levels/units. 
+
+We also recommend to sort levels of factors into a meaningful order, that is overwrite the default alphabetic ordering. This is also a good place to choose alternative names for variables in the context of the present analysis.
+
+The LMM analysis is based on log-transformed reaction times `lrt`, indicated by a _boxcox()_ check of model residuals. With the exception of diagnostic plots of model residuals, the analysis of untransformed reaction times did not lead to different results and exhibited the same problems of model identification (see [Kliegl et al., 2011; Frontiers](https://doi.org/10.3389/fpsyg.2010.00238))."""
+
+# ╔═╡ 80210cd7-30c0-4d3e-8103-2fc3ac613ca7
+md"""
+Comparative density plots of all response times by cue-target relation show the times for valid cues to be faster than for the other conditions.
+"""
+
+# ╔═╡ 0d955151-a74d-42ef-888f-c361f93f4f70
+data(dat) * 
+mapping(
+	:lrt => "log(Reaction time [ms])",	
+	color= :CTR => renamer(
+		"val" => "valid cue",   
+		"sod" => "some obj/diff pos",
+		"dos" =>  "diff obj/same pos", 
+		"dod" => "diff obj/diff pos"
+	) => "Cue-target relation",     
+) * density() |> draw
+
+# ╔═╡ 0b656a8e-0cbf-4682-8269-60b251fce501
+md" An alternative visualization without overlap of the conditions can be accomplished with ridge plots."
+
+# ╔═╡ 6b2f275e-a66c-4eb1-aa79-65c6138676bc
+md" **To be done** "
+
+# ╔═╡ 99f72033-7b2a-44f8-8462-a903752c0bf1
+md" For the next set of plots we average subjects' data within the four experimental conditions. This table could be used as input for a repeated-measures ANOVA."
+
 # ╔═╡ 90259a40-37e6-4fab-bf50-137a1725d8ef
-begin
-	# Descriptive statistics
-	## Subject level
-	dat_subj = combine(groupby(dat1, [:Subj, :CTR]), 
-					   :rt => length => :n, 
-		               :rt => mean => :rt_m,
-		               :rt  => std => :rt_sd);
-	## Condition level
-	dat_cond = combine(groupby(dat_subj, [:CTR]), 
-					   :n => length => :N, 
-		               :rt_m => mean => :rt_M, 
-		               :rt_m  => std => :rt_SD, 
-                       :rt_m => (x -> std(x)/sqrt(length(x))) => :rt_SE)
-end
+dat_subj = combine(groupby(dat, [:Subj, :CTR]),
+	:rt => length => :n, 
+    :rt => mean => :rt_m,
+    :lrt  => mean => :lrt_m
+)
 
 # ╔═╡ 0c9cab96-1eed-490e-bf82-8e0d5b154f49
 begin
-	geom = visual(BoxPlot, layout_x = 1) + visual(Violin, layout_x = 2)
-	data(dat_subj) * mapping( 
-		:CTR => renamer("val" => "valid cue", 
-		     		    "sod" => "some obj/diff pos", 
-		                "dos" =>  "diff obj/same pos", 
-		                "dod" => "diff obj/diff pos") => "Cue-target relation",     
-		:rt_m => "Reaction time (ms)") * visual(BoxPlot) |> draw
+  boxplot(
+	dat_subj.CTR.refs,
+	dat_subj.lrt_m;
+	orientation=:horizontal,
+	show_notch=true,
+	axis=(; yticks=(
+			1:4,
+			[
+				"valid cue",
+				"same obj/diff pos",
+				"diff obj/same pos",
+				"diff obj/diff pos"
+			]
+		)
+	),
+	figure=(;resolution=(800, 300)),
+  )
 end
 
 # ╔═╡ 6a4b43f5-b210-4f5a-98df-4bc801a0bca3
-md""" _Figure 1._ Mean reaction times for four cue-target relations. Target appeared at (a) the cued position (valid), (b) on the same, but its other end, (c) on the other rectangle, but at corresponding horizontal/vertical physical distance, or (d) at the other end of the other rectangle, that is $\sqrt{2}$ of horizontal/vertical distance diagonally across from the cue.
-
-As indicated by the error bars, the usual skew of reactions times is present in these data. An analysis based on log-transformed reaction times (also indicated by a _boxcox()_ check of residuals) did not lead to different results (see [Kliegl et al., 2011; Frontiers](https://doi.org/10.3389/fpsyg.2010.00238)) . Therefore, for this tutorial we stick with the reaction times in original time metric.
+md""" _Figure 1._ Mean of log reaction times for four cue-target relations. Targets appeared at (a) the cued position (valid) in a rectangle, (b) in the same rectangle cue, but at its other end, (c) on the second rectangle, but at a corresponding horizontal/vertical physical distance, or (d) at the other end of the second rectangle, that is $\sqrt{2}$ of horizontal/vertical distance diagonally across from the cue, that is also at larger physical distance compared to (c).
 """
+
+# ╔═╡ e5d289fb-7134-4444-ad5a-ec1e4e1ecec5
+md" A better alternative to the boxplot is a dotplot. It also displays subjects' condition means."
+
+# ╔═╡ 5941fdc1-cf70-4f25-a65a-f3611bc1f016
+md" **To be done** "
 
 # ╔═╡ 317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 md"""## Linear mixed model
@@ -100,8 +141,8 @@ begin
 	);
 
 
-	formula = @formula  rt ~ 1 + CTR + (1 + CTR | Subj);
-	m1 = fit(MixedModel, formula, dat1, contrasts=cntr1)
+	formula = @formula  lrt ~ 1 + CTR + (1 + CTR | Subj);
+	m1 = fit(MixedModel, formula, dat, contrasts=cntr1)
 end
 
 # ╔═╡ 9335cbb7-4635-4b40-bb14-8a59a2701389
@@ -110,12 +151,72 @@ VarCorr(m1)
 # ╔═╡ 6b1f8ee2-9051-4b24-baa7-75e1c479ede7
 issingular(m1)
 
+# ╔═╡ 293cc641-30a4-447c-8139-c8e52c3212c0
+md" LMM `m1` is not fully supported by the data; it is overparameterized. This is also visible in the PCA: only three, not four PCS are needed to account for all the variance and covariance in the random-effect structure. The problem is the +.93 CP for spatial `sod` and attraction `dod` effects."
+
 # ╔═╡ 2f2e6cc2-a8a0-4278-9d62-d6d755ac0a8b
 MixedModels.PCA(m1)
 
+# ╔═╡ 90828890-5f27-4ce7-b1c2-05d0c56b7156
+md""" ## Diagnostic plots of LMM residuals
+
+Do model residuals meet LMM assumptions? Classic plots are 
+
++ Residual over fitted
++ Quantiles of model residuals over theoretical quantiles of normal distribution
+
+### Residual-over-fitted plot
+
+The slant in residuals show a lower and upper boundary of reaction times, that is we have have too few short and too few long residuals. Not ideal, but at least width of the residual band looks similar across the fitted values, that is there is no evidence for heteroskedasticity.
+"""
+
+# ╔═╡ 6469a4d3-8390-42c9-8f7f-df40a4609a6f
+scatter(fitted(m1), residuals(m1))
+
+# ╔═╡ f6b12c9b-d6d3-4860-b86c-16d1a5a99b3a
+md""" ### Q-Q plot
+
+The plot of quantiles of model residuals over corresponding quantiles of the normal distribution should yield a straight line along the main diagonal. 
+"""
+
+# ╔═╡ 6f64664f-8492-4ad8-88e0-d3cc8ff3ec72
+qqnorm(residuals(m1), qqline = :R) 
+
+# ╔═╡ 41f729d2-54e7-49df-9348-bbf0c1bdf5db
+md""" ### Observed and theoretical normal distribution
+
+The violation of expectation is again due to the fact that the distribution of residuals is much narrower than expected from a normal distribution. We can see this in this plot. Overall, it does not look too bad.
+"""
+
+# ╔═╡ 24c11873-e55c-4241-aa96-3c5b35a974c0
+begin
+ n=nrow(dat)
+ dat_rz = DataFrame(value=vcat(residuals(m1) ./ std(residuals(m1)), randn(n)), 
+		            curve= vcat(fill.("residual", n), fill.("normal", n)))
+ data(dat_rz) * mapping(:value, color=:curve) * density(bandwidth=.1) |> draw
+end
+
 # ╔═╡ 12e3d62f-0330-440d-9971-19d11c1993e0
 md""" ## Conditional modes
-### Caterpillar plot
+
+Now we move on to visualizations that are based on model parameters and subjects' data, that is "predictions" of the LMM for subject's GM and experimental effects. Three important plots are 
+
++ Overlay
++ Caterpillar
++ Shrinkage
+
+### Overlay
+
+The first plot overlays shrinkage-corrected conditional modes of the random effects with within-subject-based and pooled GMs and experimental effects.
+"""
+
+# ╔═╡ 08b666d7-df8d-4cad-89fc-3ba9f359180e
+md" **To be done** "
+
+# ╔═╡ 1e4da3e3-1b05-40af-8de8-1206879f96c0
+md""" ### Caterpillar plot
+
+The caterpillar plot also reveals the high correlation between spatial `sod` and attraction `dod` effects.
 """
 
 # ╔═╡ edbf6df5-bca3-4b5f-8c4c-a7c346899319
@@ -127,6 +228,9 @@ end
 # ╔═╡ 2586e36d-36f7-480f-8848-5a4ace1f0b80
 md"""### Shrinkage plot
 """
+
+# ╔═╡ d5fc5ab1-abdc-416a-a304-be70367d32bb
+md" And once more evidence for a problem with the visualization of the spatial `sod` and attraction `dod` CP. The corresponding panel illustrates an *implosion* of conditional modes."
 
 # ╔═╡ 06ba4e03-ecf1-492c-9c47-1dfa1ce2550a
 shrinkageplot!(Figure(; resolution=(1000,1000)), m1)
@@ -156,7 +260,10 @@ end
 nrow(dat2) # 10_000 estimates for each of 15 model parameters 
 
 # ╔═╡ 12bad831-0ec4-4e05-a635-77411b49035d
-md" ### Shortest coverage interval"
+md" ### Shortest coverage interval
+
+The upper limit of the interval for the critical CP `CTR: sod, CTR: dod`
+is hitting the upper wall of a perfect correlation. This is evidence of singularity. The other intervals do not exhibit such pathologies; they appear to be ok."
 
 # ╔═╡ 208b7a0d-358a-4e9c-b16f-519057137737
 DataFrame(shortestcovint(samp))
@@ -245,7 +352,7 @@ begin
 end
 
 # ╔═╡ a332072a-dbb2-4805-9268-264d3c004a2a
-md"""Two of the CPs stand out positively. First, the correlation between GM and the spatial effect is well defined. Second, the correlation between spatial and attraction effect is close to the 1.0 border. This CP will be replicated with a larger sample in script `kkl15.jl` ((Kliegl, Kuschela, & Laubrock (2015). 
+md"""Two of the CPs stand out positively. First, the correlation between GM and the spatial effect is well defined. Second, as discussed throughout this script, the CP between spatial and attraction effect is close to the 1.0 border and clearly not well defined. Therefore, this CP will be replicated with a larger sample in script `kkl15.jl` ((Kliegl, Kuschela, & Laubrock (2015). 
 
 **That's it for now. Have fun!**
 """
@@ -1581,19 +1688,37 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─e53c82d6-6deb-4a2c-a127-9cd6805cc74b
 # ╠═c8032155-0298-438c-8d2e-e711ce8a3055
-# ╠═539399d9-1b68-4d90-8e63-ff5f2674c494
+# ╟─539399d9-1b68-4d90-8e63-ff5f2674c494
 # ╠═47e078b0-41ab-4186-8680-aff3a79ea3c7
+# ╟─f97a8097-af57-45ec-8a5b-45d02a5c46cf
+# ╟─80210cd7-30c0-4d3e-8103-2fc3ac613ca7
+# ╠═0d955151-a74d-42ef-888f-c361f93f4f70
+# ╟─0b656a8e-0cbf-4682-8269-60b251fce501
+# ╟─6b2f275e-a66c-4eb1-aa79-65c6138676bc
+# ╟─99f72033-7b2a-44f8-8462-a903752c0bf1
 # ╠═90259a40-37e6-4fab-bf50-137a1725d8ef
 # ╠═0c9cab96-1eed-490e-bf82-8e0d5b154f49
 # ╟─6a4b43f5-b210-4f5a-98df-4bc801a0bca3
+# ╟─e5d289fb-7134-4444-ad5a-ec1e4e1ecec5
+# ╟─5941fdc1-cf70-4f25-a65a-f3611bc1f016
 # ╟─317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 # ╠═e87aa1f2-3578-47d1-bc66-3055b395cfe7
 # ╠═9335cbb7-4635-4b40-bb14-8a59a2701389
 # ╠═6b1f8ee2-9051-4b24-baa7-75e1c479ede7
+# ╟─293cc641-30a4-447c-8139-c8e52c3212c0
 # ╠═2f2e6cc2-a8a0-4278-9d62-d6d755ac0a8b
+# ╟─90828890-5f27-4ce7-b1c2-05d0c56b7156
+# ╠═6469a4d3-8390-42c9-8f7f-df40a4609a6f
+# ╟─f6b12c9b-d6d3-4860-b86c-16d1a5a99b3a
+# ╠═6f64664f-8492-4ad8-88e0-d3cc8ff3ec72
+# ╟─41f729d2-54e7-49df-9348-bbf0c1bdf5db
+# ╠═24c11873-e55c-4241-aa96-3c5b35a974c0
 # ╟─12e3d62f-0330-440d-9971-19d11c1993e0
+# ╟─08b666d7-df8d-4cad-89fc-3ba9f359180e
+# ╟─1e4da3e3-1b05-40af-8de8-1206879f96c0
 # ╠═edbf6df5-bca3-4b5f-8c4c-a7c346899319
 # ╟─2586e36d-36f7-480f-8848-5a4ace1f0b80
+# ╟─d5fc5ab1-abdc-416a-a304-be70367d32bb
 # ╠═06ba4e03-ecf1-492c-9c47-1dfa1ce2550a
 # ╟─26840ed8-ba75-4036-b1fa-e0a75478c66c
 # ╠═408ac3d6-b284-4f2c-b0f9-e26e3d1e4a65
