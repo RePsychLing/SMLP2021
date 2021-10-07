@@ -481,6 +481,100 @@ issingular(m1)
 
 # ╔═╡ 5f7a0626-92af-4ec7-aa86-e3559efab511
 VarCorr(m1)
+# ╔═╡ 242d5f20-b42a-4043-9fe1-5b272cf60194
+md"""Depending on the random number for stratified samplign, LMM `m1` may or may not be supported by the data. 
+
+We also fit an alternative parameterization, estimating VCs and CPs for `Test` scores rather than `Test` effects by replacing the `1 + ...` in the RE terms with `0 + ...`.
+"""
+
+# ╔═╡ 67e74190-ea65-42a3-a668-6262012b0492
+begin
+	f2 =  @formula zScore ~ 1 + Test * a1 * Sex +
+	                       (0 + Test + a1 + Sex | School) + (0 + Test | Child) +
+	                        zerocorr(0 + Test | Cohort) 
+	m2 = fit(MixedModel, f2, dat, contrasts=contr)
+end
+
+# ╔═╡ b9fab30a-fbcb-40f2-822f-52e8292cf77e
+issingular(m2)
+
+# ╔═╡ b4a7ae70-8e34-436b-84eb-0174b9ce7ded
+md"""
+Depending on the random number generator seed, the model may or may not be supported in the alternative parameterization of scores. The fixed-effects profile is not affected (see 2.8 below). 
+"""
+
+# ╔═╡ 25268edb-e253-4246-bc45-a88288e77daf
+md"""**RK: The order of RE terms is critical. In formula `f2` the `zerocorr()` term must be placed last as shown. If it is placed first, School-related and Child-related CPs are estimated/reported (?) as zero. This was not the case for formula `m1`. Thus, it appears to be related to the `0`-intercepts in School and Child terms. Need a reprex.**
+"""
+
+# ╔═╡ f188d9af-c47d-4809-ad6e-d54f9a094067
+VarCorr(m2)
+
+# ╔═╡ a70fe575-51ce-45df-a0c0-12205a5efd88
+md"""
+### 2.7 Principle Component Analysis of Random Effect Structure (rePCA)
+
+The `ìssingular()` command is sort of a shortcut for a quick inspection of the principle components (PCs) of the variance-covariance matrix of the RES. It is a conservative indicator. All that it is checking is whether one of the diagonal elements of \lambda matrices is exactly zero, which gets us into the area of "exactly zero" versus "very near to zero". With the `MixedModels.PCA()` command, we also obtain information about the amount of cumulative variance accounted for as we add PCs.  `ìssingular()` is checking on the relative covariance scale whereas the PCA is on the correlation scale. They can be quite different. 
+
+The output also provides PC loadings which may facilitate interpretation of the CP matrices (if estimated). This topic will be picked uo in a separate vignette. See also [Fühner et al. (2021)](https://rdcu.be/cwSeR) for an application.
+
+#### 2.7.1 Effects in RES
+
+For every random factor, `MixedModels.PCA()` extracts as many PCs as there are VCs. Therefore, the cumulation of variance across PCs within a random factor will always add up to 100% -- at the latest with the last VC, but, in the case of overparameterized LMMs, the ceiling will be reached earlier. The final PCs are usually quite small. 
+
+PCs are extracted in the order of the amount of unique variance they account for. The first PC accounts for the largest and the final PC for the least  amount of variance. The number the PCs with percent variance above a certain threshold indicates the number of weighted composites needed and reflects the dimensionality of the orthogonal space within which (almost) all the variance can be accounted for. The weights for forming composite scores are the listed loadings. For ease of interpretation it is often useful to change the sign of some composite scores. 
+
+The PCA for LMM `m1` shows that each of the five PCs for `Child` accounts for a non-zero percent of unique variance. 
+
+For `School`  fewer than seven PCs have unique variance. The exact number depends on sampling. The overparameterization of `School` might be resolved when the CPs for `Sex` are dropped from the LMM. 
+
+`Cohort` was estimated with CPs forced to zero. Therefore, the VCs were forced to be orthogonal; they already represent the PCA solution. However, depending on sampling, not all PCs may be identified for this random factor either.
+
+Importantly, again depending on sampling, a non-singular fit does not imply that unique variance is associated with all PCs (i.e., not for last PC for  `School`). Embrace uncertainty!
+"""
+
+# ╔═╡ 3cf33a07-62b9-4068-9eea-1c04effe5716
+MixedModels.PCA(m1)
+
+# ╔═╡ 09c7f02c-bd47-4de4-b586-491aa0e3d584
+md"""#### 2.7.2 Scores in RES
+
+Now lets looks at the PCA results for the alternative parameterization of LMM `m2`.  It is important to note that the reparameterization to base estimates of VCs and CPs on scores rather than effects applies only to the `Test` factor (i.e., the first factor in the formula); VCs for `Sex` and `age` refer to the associated effects. 
+
+Depending on  sampling, the difference between LMM `m1` and LMM `m2` may show that overparameterization according to PCs may depend on the specification chosen for the other the random-effect structure. 
+
+**Note: For the _complete_ data, all PCs had unique variance associated with them.**
+"""
+
+# ╔═╡ 6c350be3-d451-4ee1-a13c-c7b5498f8726
+MixedModels.PCA(m2)
+
+# ╔═╡ 920edea4-f2a0-4c50-af52-326832310802
+md"""### 2.8 Summary of results for stratified subset of data
+
+Returning to the theoretical focus of the article, the significant main effects of `age` and `Sex`, the interactions between `age` and c1 and c4 contrasts and the interactions between `Sex` and three test contrasts (c1, c2, c4) are replicated. Obviously, the subset of data is much noisier than the full set.
+"""
+
+# ╔═╡ 4572b20e-19e2-45e8-ba45-d4eb55cd3f4a
+md"""
+## 3. `Age x Sex` nested in levels of `Test`
+
+In this final LMM, we test _post-hoc_  five `age x Sex` interactions by nesting the interaction in the levels of `Test`. As this LMM `m2_nested` is a reparameterization of LMM `m2`. 
+"""
+
+# ╔═╡ 801ba580-31c5-4d04-8557-afa86586048f
+
+begin
+f2_nested = @formula zScore ~ 1 + Test + Test & (a1*Sex) +
+							   (0+Test+a1+Sex | School) + (0+Test | Child) + 
+	   							zerocorr(0+Test | Cohort)
+m2_nested = fit(MixedModel, f2_nested, dat, contrasts=contr)
+end
+
+# ╔═╡ cfc83241-1b91-4baf-8210-a9d48489894d
+md"""
+The results show that none of the interactions in the panels of Figure 2 is significant.  The size and direction of interaction effects correspond with what is shown in Figure 2.
+"""
 
 # ╔═╡ 242d5f20-b42a-4043-9fe1-5b272cf60194
 md"""Let's remove the school-related sex VC."""
