@@ -21,6 +21,9 @@ begin
 	using StatsPlots
 	using AlgebraOfGraphics: density
 	using AlgebraOfGraphics: boxplot
+	using MixedModelsMakie: qqnorm
+	using MixedModelsMakie: ridgeplot
+	using MixedModelsMakie: scatter
 	const rng = MersenneTwister(1234321)
 	CairoMakie.activate!(type="svg") # use SVG (other options include PNG)
 	Base.show(io::IO, ::MIME"text/html", 
@@ -34,13 +37,16 @@ md"""
 ## Date: 2021-09-29
 
 ## Background
-This is a follow-up to ([Kliegl et al., 2011; Frontiers](https://doi.org/10.3389/fpsyg.2010.00238); see also script `kwdyz.jl`) from an experiment looking at a variety of effects of visual cueing under four different cue-target relations (CTRs). In this experiment two rectangles are displayed (1) in horizontal orientation , (2) in vertical orientation, (3) in left diagonal orientation, or in (4) right diagonal orientation relative to a central fixation point. Subjects react to the onset of a small or a large visual target occuring at one of the four ends of the two rectangles. The target is cued validly on 70% of trials by a brief flash of the corner of the rectangle at which it appears; it is cued invalidly at the three other locations 10% of the trials each.  Diagonal orientations of rectangles and large target size were not part of design of Kliegl et al. (2011). 
+
+This is a follow-up to ([Kliegl et al., 2011; Frontiers](https://doi.org/10.3389/fpsyg.2010.00238); see also script `kwdyz.jl`) from an experiment looking at a variety of effects of visual cueing under four different cue-target relations (CTRs). In this experiment two rectangles are displayed (1) in horizontal orientation , (2) in vertical orientation, (3) in left diagonal orientation, or in (4) right diagonal orientation relative to a central fixation point. Subjects react to the onset of a small or a large visual target occuring at one of the four ends of the two rectangles. The target is cued validly on 70% of trials by a brief flash of the corner of the rectangle at which it appears; it is cued invalidly at the three other locations 10% of the trials each. This implies a latent imbalance in design that is not visiable in the repeated-measures ANOVA, but we will show its effect in the random-effect structure and conditional modes. 
+
+There are a couple of differences between the first and this follow-up experiment, rendering it more a conceptual than a direct replication. First, the original experiment was carried out at Peking University and this follow-up at Potsdam University. Second, diagonal orientations of rectangles and large target sizes were not part of the design of Kliegl et al. (2011). To keep matters somewhat simpler and comparable we ignore them in this script.  
 
 We specify three contrasts for the four-level factor CTR that are derived from spatial, object-based, and attractor-like features of attention.  They map onto sequential differences between appropriately ordered factor levels. Replicating Kliegl et al. (2011), the attraction effect was not significant as a fixed effect, but yielded a highly reliable variance component (VC; i.e., reliable individual differences in positive and negative attraction effects cancel the fixed effect). Moreover, these individual differences in the attraction effect were negatively correlated with those in the spatial effect.
 
-A few years after the publication of Kliegl et al. (2011), we determined that the theoretically critical correlation parameter (CP) between the spatial effect and the attraction effect was the source of a non-singular LMM in that paper. The present study served the purpose to estimate this parameter with a larger sample and a wider variety of experimental conditions. Therefore, the code in this script is identical to `kwdyz.jl` for now. We may return later to illustrate issues of model selection when additional within-subject manipulations relating to the orientiation of the rectangle cues are modelled in the random effect structure.  
-
-An analysis including the additional experimental manipulations of target size and orientation of cue rectangle was reported in the parsimonious mixed-model paper [(Bates et al., 2015)](https://arxiv.org/abs/1506.04967); they were also used in a paper of GAMMs [(Baayen et al., 2017)](https://doi.org/10.1016/j.jml.2016.11.006) Data and R scripts are also available in [R-package RePsychLing](https://github.com/dmbates/RePsychLing/tree/master/data/). In this and the complementary `kkl15.jl` scripts, we provide some of the corresponding analyses with _MixedModels.jl_. An analysis focusing on the complex experimental design and the analysis of a complex random-effect structure for this design is in script `kkl15_complex.jl`.
+This comparison is of interest because a few years after the publication of Kliegl et al. (2011), the theoretically critical correlation parameter (CP) between the spatial effect and the attraction effect was determined as the source of a non-singular LMM in that paper. The present study served the purpose to estimate this parameter with a larger sample and a wider variety of experimental conditions. Therefore, the code in this script is largely the same as the one in `kwdyz.jl`. 
+ 
+There will be another vignette modelling the additional experimental manipulations of target size and orientation of cue rectangle. This analysis was reported in the parsimonious mixed-model paper [(Bates et al., 2015)](https://arxiv.org/abs/1506.04967); they were also used in a paper of GAMMs [(Baayen et al., 2017)](https://doi.org/10.1016/j.jml.2016.11.006) Data and R scripts are also available in [R-package RePsychLing](https://github.com/dmbates/RePsychLing/tree/master/data/). Here we provide some of the corresponding analyses with _MixedModels.jl_ and a much wider variety of visualizations of LMM results. A _MixedModels.jl_-based analysis focusing on the complex experimental design and the analysis of a complex random-effect structure for this design is in script `kkl15_complex.jl`.
 
 ## Packages
 """
@@ -195,9 +201,6 @@ end
 # ╔═╡ 1e740cc3-3037-4fa3-82d2-75b13b86a593
 @df dat_subj_w StatsPlots.corrplot(cols(6:9), grid = false, compact=false)
 
-# ╔═╡ 7343b5fc-3664-4f13-8a95-8795a1b0c959
-
-
 # ╔═╡ 019a4876-e32d-41f4-9636-7efaea5e4929
 md"**Note:** Two of the theoreticsally irrelevant within-subject effect correlations have a different sign than the corresponding, non-significant CPs in the LMM; they are negative here, numerically positive in the LMM. This occurs only very rarely in the case of ecological correlations. However, as they are not significant according to shortest coverage interval, it may not be that relevant either. It is the case both for effects based on log-transformed and raw reaction times."
 
@@ -206,11 +209,9 @@ md"""## Linear mixed model
 """
 
 # ╔═╡ e827e62a-b458-46a7-a86c-b3c3392c3e6a
-begin
-	cntr1 = Dict(
+cntr1 = Dict(
     :CTR  => SeqDiffCoding(levels=["val", "sod", "dos", "dod"]),
- 	);
-end
+ 	)
 
 # ╔═╡ bd24f002-3f17-4cea-b371-5a972956da11
 begin	
@@ -257,7 +258,7 @@ The slant in residuals show a lower and upper boundary of reaction times, that i
 """
 
 # ╔═╡ e215a6c6-3499-4bd4-bdc5-c153ade0122a
-StatsPlots.scatter(fitted(m1), residuals(m1))
+scatter(fitted(m1), residuals(m1))
 
 # ╔═╡ 2a00f1e4-f7a0-4b4f-941e-739c0af69a15
 md" With many observations the scatterplot is not that informative. Contour plots or heatmaps may be an alternative. "
@@ -275,16 +276,16 @@ md""" ### Q-Q plot
 The plot of quantiles of model residuals over corresponding quantiles of the normal distribution should yield a straight line along the main diagonal. 
 """
 
-# ╔═╡ b0707eaa-ddea-4c9f-a944-4341a664e8bc
-StatsPlots.qqnorm(residuals(m1), qqline = :R)
+# ╔═╡ bf4682ef-a098-4625-ab09-fdc381663916
+qqnorm(m1)
 
 # ╔═╡ dccc2e5b-76f1-4a0a-a622-3f76faf705b5
-StatsPlots.qqnorm(residuals(m1_rt), qqline = :R)
+qqnorm(m1_rt)
 
 # ╔═╡ 78828df6-37c6-4078-b238-ff99f01f4524
 md""" ### Observed and theoretical normal distribution
 
-The violation of expectation is again due to the fact that the distribution of residuals is much narrower than expected from a normal distribution. We can see this in this plot. Overall, it does not look too bad.
+The violation of expectation is again due to the fact that the distribution of residuals is narrower than expected from a normal distribution. We can see this in this plot. Overall, it does not look too bad.
 """
 
 # ╔═╡ 1ea84110-ea5f-4eb1-9b56-54a35bff5099
@@ -311,6 +312,26 @@ md" When we order the conditional modes for GM, that is `(Intercept)`, the outli
 
 # ╔═╡ 186c1a60-61d2-472c-8bdb-0a74728ea478
 caterpillar!(Figure(; resolution=(800,1000)), cm1; orderby=1)
+
+# ╔═╡ 7409472a-97a3-4790-83ed-e6760e4230fd
+md"The catepillar plot also reveals that credibilty intervals are much shorter for subjects' Grand Means, shown in `(Intercept)`, than the subjects' experimental effects, because the latter are based on difference scores not means. Moreover, credibility intervals are shorter for the first spatial effect `sod` than the other two effects, because the spatial effect involves the valid condition which yielded three times as many trials than the other three conditions. Consequently, the spatial effect is more reliable. Unfortunately, due to differences in scaling of the x-axis of the panels this effect must be inferred. One option to reveal this difference is to reparameterize the LMM such model parameters estimate the conditional modes for the levels of condition rather than the contrast-based effects. This is accomplished by replacing the `1` in the random effect term with `0`, as shown next.
+"
+
+# ╔═╡ 9c8ee297-e4db-4c25-9ef6-1052050f3d43
+begin	
+	formula1L = @formula  rt ~ 1 + CTR + (0 + CTR | Subj);
+	m1L = fit(MixedModel, formula1L, dat, contrasts=cntr1)
+	VarCorr(m1L)
+end
+
+# ╔═╡ 94863fb5-a7e5-4eff-ad81-44a157a54e62
+md" The caterpillar plot for levels shows the effect of the number of trials on credibility intervals; they are obviously much shorter for the valid condition. Note that this effect is not visible in a repeated-measure ANOVA with four condition means per subject as input." 
+
+# ╔═╡ e8f21abc-6658-4d51-9a71-28eadec35065
+begin
+	cm1L = ranefinfo(m1L)[:Subj]
+	caterpillar!(Figure(; resolution=(800,1000)), cm1L; orderby=1)
+end
 
 # ╔═╡ 2586e36d-36f7-480f-8848-5a4ace1f0b80
 md"""### Shrinkage plot
@@ -363,6 +384,12 @@ md" ### Shortest coverage interval"
 
 # ╔═╡ 8b158499-04f6-43a2-be6c-7ca5e28e0ce7
 DataFrame(shortestcovint(samp))
+
+# ╔═╡ c4d81087-18d7-4958-963c-d9dc304cb7ca
+md"We can also visualize the shortest coverage intervals for fixed effects with the `ridgeplot()` command:"
+
+# ╔═╡ 3b4b8f63-44ba-4399-8d9e-31293f7d24c0
+ridgeplot(samp, show_intercept=false)
 
 # ╔═╡ ecf2d9c6-9e91-4bc7-adec-6b576bd6471f
 md""" ### Comparative density plots of bootstrapped parameter estimates 
@@ -693,6 +720,12 @@ version = "3.39.0"
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 
+[[deps.ContextVariablesX]]
+deps = ["Compat", "Logging", "UUIDs"]
+git-tree-sha1 = "8ccaa8c655bc1b83d2da4d569c9b28254ababd6e"
+uuid = "6add18c4-b38d-439d-96f6-d6bc489c04c5"
+version = "0.1.2"
+
 [[deps.Contour]]
 deps = ["StaticArrays"]
 git-tree-sha1 = "9f02045d934dc030edad45944ea80dbd1f0ebea7"
@@ -897,9 +930,9 @@ version = "0.59.0"
 
 [[deps.GR_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Pkg", "Qt5Base_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "ef49a187604f865f4708c90e3f431890724e9012"
+git-tree-sha1 = "4c8c0719591e108a83fb933ac39e32731c7850ff"
 uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
-version = "0.59.0+0"
+version = "0.60.0+0"
 
 [[deps.GeoInterface]]
 deps = ["RecipesBase"]
@@ -1061,9 +1094,9 @@ version = "0.21.2"
 
 [[deps.JSON3]]
 deps = ["Dates", "Mmap", "Parsers", "StructTypes", "UUIDs"]
-git-tree-sha1 = "b3e5984da3c6c95bcf6931760387ff2e64f508f3"
+git-tree-sha1 = "7d58534ffb62cd947950b3aa9b993e63307a6125"
 uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-version = "1.9.1"
+version = "1.9.2"
 
 [[deps.JpegTurbo_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1289,10 +1322,10 @@ version = "0.3.10"
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[deps.Mocking]]
-deps = ["Compat", "ExprTools"]
-git-tree-sha1 = "29714d0a7a8083bba8427a4fbfb00a540c681ce7"
+deps = ["Compat", "ContextVariablesX", "ExprTools"]
+git-tree-sha1 = "d5ca7901d59738132d6f9be9a18da50bc85c5115"
 uuid = "78c3b35d-d492-501b-9361-3d52fe80e533"
-version = "0.7.3"
+version = "0.7.4"
 
 [[deps.MosaicViews]]
 deps = ["MappedArrays", "OffsetArrays", "PaddedViews", "StackViews"]
@@ -2028,7 +2061,7 @@ version = "0.9.1+5"
 """
 
 # ╔═╡ Cell order:
-# ╟─e53c82d6-6deb-4a2c-a127-9cd6805cc74b
+# ╠═e53c82d6-6deb-4a2c-a127-9cd6805cc74b
 # ╠═c8032155-0298-438c-8d2e-e711ce8a3055
 # ╟─539399d9-1b68-4d90-8e63-ff5f2674c494
 # ╠═47e078b0-41ab-4186-8680-aff3a79ea3c7
@@ -2051,7 +2084,6 @@ version = "0.9.1+5"
 # ╠═f50e0fff-665b-4056-993c-b6dac881785b
 # ╠═a5226169-dd2e-4105-9569-98fd781332a4
 # ╠═1e740cc3-3037-4fa3-82d2-75b13b86a593
-# ╠═7343b5fc-3664-4f13-8a95-8795a1b0c959
 # ╟─019a4876-e32d-41f4-9636-7efaea5e4929
 # ╟─317f7e3d-94ef-4a36-a45d-e08b5fe0cd20
 # ╠═e827e62a-b458-46a7-a86c-b3c3392c3e6a
@@ -2068,7 +2100,7 @@ version = "0.9.1+5"
 # ╟─2a00f1e4-f7a0-4b4f-941e-739c0af69a15
 # ╠═2d5e62f0-170b-49a6-b9fd-cfb3ee06c59b
 # ╟─89ffc792-7637-4e38-b80b-1b1406222fcd
-# ╠═b0707eaa-ddea-4c9f-a944-4341a664e8bc
+# ╠═bf4682ef-a098-4625-ab09-fdc381663916
 # ╠═dccc2e5b-76f1-4a0a-a622-3f76faf705b5
 # ╟─78828df6-37c6-4078-b238-ff99f01f4524
 # ╠═1ea84110-ea5f-4eb1-9b56-54a35bff5099
@@ -2076,6 +2108,10 @@ version = "0.9.1+5"
 # ╠═edbf6df5-bca3-4b5f-8c4c-a7c346899319
 # ╟─f165a8e8-ec47-4262-956f-ab72d016afc1
 # ╠═186c1a60-61d2-472c-8bdb-0a74728ea478
+# ╟─7409472a-97a3-4790-83ed-e6760e4230fd
+# ╠═9c8ee297-e4db-4c25-9ef6-1052050f3d43
+# ╟─94863fb5-a7e5-4eff-ad81-44a157a54e62
+# ╠═e8f21abc-6658-4d51-9a71-28eadec35065
 # ╟─2586e36d-36f7-480f-8848-5a4ace1f0b80
 # ╠═06ba4e03-ecf1-492c-9c47-1dfa1ce2550a
 # ╟─aa38afc2-3eed-45f1-84d5-533861bd59ed
@@ -2087,6 +2123,8 @@ version = "0.9.1+5"
 # ╠═63dc9d34-8c7c-4dd8-af62-8717e9e73946
 # ╟─d600ea54-8848-4c2b-a364-b8dcc42a5491
 # ╠═8b158499-04f6-43a2-be6c-7ca5e28e0ce7
+# ╟─c4d81087-18d7-4958-963c-d9dc304cb7ca
+# ╠═3b4b8f63-44ba-4399-8d9e-31293f7d24c0
 # ╟─ecf2d9c6-9e91-4bc7-adec-6b576bd6471f
 # ╠═06a66a4e-792f-4302-8530-75905c4d3922
 # ╟─aa2531f8-3016-4f53-b4f5-68bfb293a192
